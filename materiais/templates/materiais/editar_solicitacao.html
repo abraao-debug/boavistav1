@@ -1,0 +1,194 @@
+{% extends 'materiais/base.html' %}
+{% block title %}Editar Solicitação de Compra{% endblock %}
+
+{% block content %}
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+
+<style>
+    {% include 'materiais/styles_dashboard.css' %}
+    .item-adicionado { background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: .375rem; padding: .75rem 1rem; }
+    #itemsListContainer { max-height: 350px; overflow-y: auto; overflow-x: hidden; padding-right: 5px; }
+    .select2-container--default .select2-selection--single { height: calc(1.5em + .75rem + 2px); padding: .375rem .75rem; border: 1px solid #ced4da; }
+    .select2-container--default .select2-selection--single .select2-selection__rendered { line-height: 1.5; padding-left: 0; }
+    .select2-container--default .select2-selection--single .select2-selection__arrow { height: calc(1.5em + .75rem); }
+</style>
+
+<form method="POST" id="mainForm">
+    {% csrf_token %}
+    <input type="hidden" name="itens_json" id="itensJsonInput">
+
+    <div class="d-flex align-items-center mb-4">
+        <a href="{% url 'materiais:gerenciar_cotacoes' %}" class="btn btn-secondary me-3"><i class="fas fa-arrow-left"></i> Voltar</a>
+        <div>
+            <h4 class="mb-0">Editar Solicitação ({{ solicitacao.numero }})</h4>
+            <p class="text-muted mb-0">Ajuste os dados e os itens da solicitação de compra.</p>
+        </div>
+    </div>
+    <hr class="mb-4">
+
+    <div class="row">
+        <div class="col-lg-7 mb-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5>Informações Gerais</h5>
+                    <div class="row">
+                        <div class="col-md-4 mb-3"><label class="form-label">Solicitante</label><input type="text" class="form-control" value="{{ solicitacao.solicitante.get_full_name|default:solicitacao.solicitante.username }}" disabled></div>
+                        <div class="col-md-4 mb-3">
+                            <label for="categoria_sc" class="form-label">Categoria da SC</label>
+                            <select class="form-select" id="categoria_sc" name="categoria_sc"><option value="">Nenhuma</option>{% for cat_sc in categorias_sc %}<option value="{{ cat_sc.id }}" {% if solicitacao.categoria_sc_id == cat_sc.id %}selected{% endif %}>{{ cat_sc.nome }}</option>{% endfor %}</select>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="obra" class="form-label">Obra *</label>
+                            <select class="form-select" id="obra" name="obra" required>{% for o in obras %}<option value="{{ o.id }}" {% if o.id == solicitacao.obra_id %}selected{% endif %}>{{ o.nome }}</option>{% endfor %}</select>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="data_necessidade" class="form-label">Data Necessária *</label>
+                            <input type="date" class="form-control" id="data_necessidade" name="data_necessidade" value="{{ solicitacao.data_necessidade|date:'Y-m-d' }}" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="destino" class="form-label">Destino de Entrega</label>
+                            <select class="form-select" id="destino" name="destino"><option value="">Mesmo endereço da obra</option>{% for destino in destinos_entrega %}<option value="{{ destino.id }}" {% if solicitacao.destino_id == destino.id %}selected{% endif %}>{{ destino.nome }}</option>{% endfor %}</select>
+                        </div>
+                    </div>
+                    <div class="mb-3"><label for="justificativa" class="form-label">Observação Geral</label><textarea class="form-control" id="justificativa" name="justificativa" rows="3">{{ solicitacao.justificativa }}</textarea></div>
+                    <div class="emergency-box"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="is_emergencial" name="is_emergencial" {% if solicitacao.is_emergencial %}checked{% endif %}><label class="form-check-label" for="is_emergencial"><i class="fas fa-exclamation-triangle"></i> Solicitação Emergencial</label></div></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-5 mb-4">
+            <div class="card h-100">
+                <div class="card-body d-flex flex-column">
+                    <div class="d-flex justify-content-between align-items-center mb-3"><h5>Itens da Solicitação (<span id="itemCount">0</span>)</h5><button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addItemModal"><i class="fas fa-plus"></i> Adicionar Item</button></div>
+                    <div id="itemsListContainer" class="flex-grow-1"><div id="placeholder" class="text-center p-4 text-muted d-flex flex-column justify-content-center align-items-center h-100"><i class="fas fa-box-open fa-3x mb-3"></i><p class="mb-2">Nenhum item adicionado.</p></div></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="text-end mt-2"><a href="{% url 'materiais:gerenciar_cotacoes' %}" class="btn btn-light border">Cancelar</a><button type="submit" class="btn btn-primary px-4">Salvar Alterações</button></div>
+</form>
+
+<div class="modal fade" id="addItemModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title">Adicionar Item do Catálogo</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <div class="mb-3"><label for="itemCatalogoSelect" class="form-label">Buscar Item no Catálogo *</label><select class="form-select" id="itemCatalogoSelect" style="width: 100%;"></select></div>
+                <div id="itemDetails" class="d-none">
+                    <div class="row bg-light p-2 rounded mb-3 mx-1">
+                        <div class="col-md-8"><small class="text-muted d-block">Descrição do Item (Travado)</small><p id="detailDescricao" class="fw-bold mb-0"></p></div>
+                        <div class="col-md-4"><small class="text-muted d-block">Unidade (Travado)</small><p id="detailUnidade" class="fw-bold mb-0"></p></div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3"><label for="quantidadeInput" class="form-label">Quantidade *</label><input type="number" class="form-control" id="quantidadeInput" value="1" min="0.01" step="0.01"></div>
+                        <div class="col-md-6 mb-3"><label for="observacaoInput" class="form-label">Observação (Opcional)</label><textarea class="form-control" id="observacaoInput" rows="1"></textarea></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button><button type="button" class="btn btn-success" id="addItemBtn">Adicionar Item</button></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+
+{% block javascript %}
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const catalogItems = JSON.parse('{{ itens_catalogo_json|escapejs }}');
+    let itemsList = JSON.parse('{{ itens_existentes_json|escapejs }}');
+
+    const itemCatalogoSelect = $('#itemCatalogoSelect');
+    const mainForm = document.getElementById('mainForm');
+    const hiddenInput = document.getElementById('itensJsonInput');
+    const itemsListContainer = document.getElementById('itemsListContainer');
+    const placeholder = document.getElementById('placeholder');
+    const itemCountSpan = document.getElementById('itemCount');
+    const addItemBtn = document.getElementById('addItemBtn');
+
+    itemCatalogoSelect.select2({
+        placeholder: "Busque pelo código ou descrição do item...",
+        dropdownParent: $('#addItemModal'),
+        data: catalogItems.map(item => ({id: item.id, text: `${item.codigo} - ${item.descricao}`}))
+    });
+    itemCatalogoSelect.val(null).trigger('change');
+
+    itemCatalogoSelect.on('change', function() {
+        const selectedId = $(this).val();
+        const selectedItem = catalogItems.find(item => item.id == selectedId);
+        const detailsDiv = document.getElementById('itemDetails');
+        if (selectedItem) {
+            document.getElementById('detailDescricao').textContent = selectedItem.descricao;
+            document.getElementById('detailUnidade').textContent = selectedItem.unidade__sigla;
+            detailsDiv.classList.remove('d-none');
+        } else {
+            detailsDiv.classList.add('d-none');
+        }
+    });
+
+    addItemBtn.addEventListener('click', function() {
+        const selectedId = itemCatalogoSelect.val();
+        if (!selectedId) { alert('Por favor, selecione um item do catálogo.'); return; }
+        const quantidade = parseFloat(document.getElementById('quantidadeInput').value);
+        if (!quantidade || quantidade <= 0) { alert('Por favor, informe uma quantidade válida.'); return; }
+        const selectedItem = catalogItems.find(item => item.id == selectedId);
+        itemsList.push({
+            item_id: selectedId,
+            descricao: selectedItem.descricao,
+            unidade: selectedItem.unidade__sigla,
+            quantidade: quantidade,
+            observacao: document.getElementById('observacaoInput').value.trim()
+        });
+        renderItems();
+        resetModal();
+    });
+
+    function renderItems() {
+        itemsListContainer.innerHTML = '';
+        if (itemsList.length > 0) {
+            placeholder.style.display = 'none';
+            itemsList.forEach((item, index) => {
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'item-adicionado mb-2 d-flex justify-content-between align-items-center';
+                itemDiv.innerHTML = `<div><strong>${item.descricao}</strong><small class="d-block text-muted">${item.quantidade} ${item.unidade}</small></div><div><button type="button" class="btn btn-sm btn-outline-danger remove-item-btn" data-index="${index}"><i class="fas fa-trash"></i></button></div>`;
+                itemsListContainer.appendChild(itemDiv);
+            });
+        } else {
+            placeholder.style.display = 'flex';
+        }
+        itemCountSpan.textContent = itemsList.length;
+    }
+
+    function resetModal() {
+        itemCatalogoSelect.val(null).trigger('change');
+        document.getElementById('itemDetails').classList.add('d-none');
+        document.getElementById('quantidadeInput').value = '1';
+        document.getElementById('observacaoInput').value = '';
+        bootstrap.Modal.getInstance(document.getElementById('addItemModal')).hide();
+    }
+    
+    itemsListContainer.addEventListener('click', function(e) {
+        const removeBtn = e.target.closest('.remove-item-btn');
+        if (removeBtn) {
+            const index = removeBtn.getAttribute('data-index');
+            itemsList.splice(index, 1);
+            renderItems();
+        }
+    });
+    
+    mainForm.addEventListener('submit', function(e) {
+        if (itemsList.length === 0) {
+            e.preventDefault();
+            alert('Você precisa adicionar pelo menos um item à solicitação.');
+            return;
+        }
+        hiddenInput.value = JSON.stringify(itemsList);
+    });
+
+    renderItems();
+});
+</script>
+{% endblock %}

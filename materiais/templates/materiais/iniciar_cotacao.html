@@ -1,0 +1,101 @@
+{% extends 'materiais/base.html' %}
+{% block title %}Registrar Cotação{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center mb-3">
+    <a href="{% url 'materiais:gerenciar_cotacoes' %}?tab=aguardando" class="btn btn-secondary me-3"><i class="fas fa-arrow-left"></i> Voltar</a>
+    <div>
+        <h4 class="mb-0">Registrar Resposta da Cotação - SC {{ solicitacao.numero }}</h4>
+        <p class="text-muted mb-0">Preencha os preços e condições recebidos do fornecedor.</p>
+    </div>
+</div>
+<hr class="mb-4">
+
+<form method="post">
+    {% csrf_token %}
+    <div class="card">
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Fornecedor</label>
+                    <input type="hidden" name="fornecedor" value="{{ fornecedor_selecionado.id }}">
+                    <input type="text" class="form-control" value="{{ fornecedor_selecionado.nome_fantasia }}" disabled readonly>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Forma de Pagamento (Sugerida)</label>
+                    <input type="text" class="form-control" value="{{ envio_cotacao.get_forma_pagamento_display }}" disabled readonly>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                     <label for="prazo_entrega" class="form-label">Prazo de Entrega</label>
+                     <input type="text" name="prazo_entrega" id="prazo_entrega" class="form-control" placeholder="Ex: 5 dias úteis">
+                </div>
+                <div class="col-md-4 mb-3">
+                     <label for="condicao_pagamento" class="form-label">Condição de Pagamento (Resposta)</label>
+                     <input type="text" name="condicao_pagamento" id="condicao_pagamento" class="form-control" placeholder="Ex: 30 dias">
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label for="valor_frete" class="form-label">Valor do Frete (se houver)</label>
+                    <div class="input-group">
+                        <span class="input-group-text">R$</span>
+                        <input type="text" class="form-control price-input" name="valor_frete" id="valor_frete" placeholder="0,00">
+                    </div>
+                </div>
+            </div>
+             <div class="mb-3">
+                <label for="endereco_entrega" class="form-label">Endereço de Entrega</label>
+                <select name="endereco_entrega" id="endereco_entrega" class="form-select">
+                    <option value="">Endereço da Obra ({{ solicitacao.obra.nome }})</option>
+                    {% for destino in destinos_entrega %}
+                        <option value="{{ destino.id }}">{{ destino.nome }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="mb-3">
+                <label for="observacoes" class="form-label">Observações Gerais da Cotação</label>
+                <textarea name="observacoes" id="observacoes" class="form-control" rows="2" placeholder="Ex: Material similar, etc."></textarea>
+            </div>
+            <hr>
+            <h6>Informe os preços para este fornecedor:</h6>
+            <p class="text-muted small">Preencha apenas os campos dos itens para os quais o fornecedor enviou um preço.</p>
+            
+            {% for item in itens_para_cotar %}
+            <div class="p-3 border rounded mb-2 bg-light">
+                <div class="row align-items-center">
+                    <div class="col-md-7">
+                        <label class="form-check-label">
+                            <strong>{{ item.descricao }}</strong>
+                            <small class="d-block text-muted">{{ item.quantidade|floatformat:2 }} {{ item.unidade }}</small>
+                        </label>
+                    </div>
+                    <div class="col-md-5">
+                        <div class="input-group">
+                            <span class="input-group-text">R$</span>
+                            <input type="text" class="form-control price-input" name="preco_{{ item.id }}" placeholder="0,00" autocomplete="off">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        <div class="card-footer text-end">
+             <a href="{% url 'materiais:gerenciar_cotacoes' %}" class="btn btn-light border">Cancelar</a>
+             <button type="submit" class="btn btn-primary"><i class="fas fa-check"></i> Registrar Cotação</button>
+        </div>
+    </div>
+</form>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.price-input').forEach(input => {
+        input.addEventListener('input', function(e) {
+            let value = e.target.value.replace(/\D/g, '');
+            if (value === '') return;
+            value = (parseInt(value, 10) / 100).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            e.target.value = value;
+        });
+    });
+});
+</script>
+{% endblock %}

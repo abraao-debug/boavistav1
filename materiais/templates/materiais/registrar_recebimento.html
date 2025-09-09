@@ -1,0 +1,202 @@
+{% extends 'materiais/base.html' %}
+{% block title %}Registrar Recebimento de Material{% endblock %}
+
+{% block content %}
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<style>
+    .select2-container .select2-selection--single { height: calc(1.5em + .75rem + 2px); }
+    #itens-container .card-body { background-color: #f8f9fa; }
+    .upload-box { border: 2px dashed #dee2e6; border-radius: .375rem; padding: 2rem; text-align: center; cursor: pointer; }
+    .upload-box:hover { background-color: #f1f3f5; }
+    .upload-box p { margin-bottom: 0; }
+    .file-name { font-weight: bold; color: #0d6efd; }
+</style>
+
+<div class="d-flex align-items-center mb-3">
+    <a href="{% url 'materiais:dashboard' %}" class="btn btn-secondary me-3"><i class="fas fa-arrow-left"></i> Voltar</a>
+    <div>
+        <h4 class="mb-0">Receber Material</h4>
+        <p class="text-muted mb-0">Registre o recebimento de materiais por item.</p>
+    </div>
+</div>
+<hr class="mb-4">
+
+<form method="POST" enctype="multipart/form-data" id="form-recebimento">
+    {% csrf_token %}
+    <div class="card mb-4">
+        <div class="card-body">
+            <h5 class="card-title">1. Selecionar Solicitação de Compra</h5>
+            <div class="mb-3">
+                <label for="sc-select" class="form-label">SC para dar baixa *</label>
+                <select id="sc-select" name="solicitacao_id" class="form-select" required>
+                    <option value="" selected disabled>Selecione uma SC para recebimento</option>
+                    {% for sc in scs_a_receber %}
+                        <option value="{{ sc.id }}">{{ sc.nome_descritivo }} ({{ sc.obra.nome }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+    </div>
+    
+    <div id="dynamic-content" class="d-none">
+        <div class="card mb-4" id="detalhes-sc-container">
+             <div class="card-body" id="detalhes-sc-content"></div>
+        </div>
+
+        <div class="card mb-4" id="itens-container">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">2. Selecionar Itens Recebidos</h5>
+                <div>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-selecionar-todos">Selecionar Todos</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-desmarcar-todos">Desmarcar Todos</button>
+                </div>
+            </div>
+            <div class="card-body p-3" id="lista-itens-receber">
+                <p class="text-muted text-center p-4">Selecione uma SC para carregar os itens.</p>
+            </div>
+        </div>
+        
+        <div class="card mb-4">
+            <div class="card-header"><h5 class="mb-0">3. Documentos Obrigatórios</h5></div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Nota Fiscal *</label>
+                        <div class="upload-box" onclick="this.querySelector('input').click()">
+                            <input type="file" name="nota_fiscal" class="d-none" required onchange="updateFileName(this)">
+                            <p><i class="fas fa-upload"></i> <span class="upload-text">Clique para anexar</span></p>
+                            <p class="file-name"></p>
+                        </div>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">SC Assinada *</label>
+                        <div class="upload-box" onclick="this.querySelector('input').click()">
+                            <input type="file" name="sc_assinada" class="d-none" required onchange="updateFileName(this)">
+                             <p><i class="fas fa-upload"></i> <span class="upload-text">Clique para anexar</span></p>
+                             <p class="file-name"></p>
+                        </div>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Boleto/Comprovante *</label>
+                         <div class="upload-box" onclick="this.querySelector('input').click()">
+                            <input type="file" name="boleto_comprovante" class="d-none" required onchange="updateFileName(this)">
+                             <p><i class="fas fa-upload"></i> <span class="upload-text">Clique para anexar</span></p>
+                             <p class="file-name"></p>
+                        </div>
+                    </div>
+                </div>
+                 <div class="mb-3">
+                    <label for="observacoes" class="form-label">Observações Gerais do Recebimento</label>
+                    <textarea name="observacoes" id="observacoes" class="form-control" rows="3"></textarea>
+                </div>
+            </div>
+        </div>
+        
+        <div class="text-end">
+            <a href="{% url 'materiais:dashboard' %}" class="btn btn-light border">Cancelar</a>
+            <button type="submit" id="btn-confirmar" class="btn btn-success" disabled>
+                <i class="fas fa-check"></i> Confirmar Recebimento (0 itens)
+            </button>
+        </div>
+    </div>
+</form>
+{% endblock %}
+
+{% block javascript %}
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const scSelect = $('#sc-select');
+    const dynamicContent = document.getElementById('dynamic-content');
+    const detalhesContent = document.getElementById('detalhes-sc-content');
+    const itensList = document.getElementById('lista-itens-receber');
+    const btnConfirmar = document.getElementById('btn-confirmar');
+    
+    scSelect.select2({ placeholder: "Selecione uma SC para recebimento" });
+
+    scSelect.on('change', function() {
+        const solicitacaoId = this.value;
+        if (!solicitacaoId) {
+            dynamicContent.classList.add('d-none');
+            return;
+        }
+        
+        detalhesContent.innerHTML = '<p class="text-center">Carregando detalhes...</p>';
+        itensList.innerHTML = '<p class="text-center">Carregando itens...</p>';
+        dynamicContent.classList.remove('d-none');
+
+        fetch(`/api/itens-para-receber/${solicitacaoId}/`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Preenche detalhes da SC
+                    detalhesContent.innerHTML = `
+                        <div class="row">
+                            <div class="col-md-3"><strong>Número:</strong> ${data.sc.numero}</div>
+                            <div class="col-md-3"><strong>Solicitante:</strong> ${data.sc.solicitante}</div>
+                            <div class="col-md-3"><strong>Obra:</strong> ${data.sc.obra}</div>
+                            <div class="col-md-3"><strong>Data:</strong> ${data.sc.data_criacao}</div>
+                        </div>`;
+
+                    // Preenche lista de itens
+                    let itemsHtml = '';
+                    if (data.itens.length > 0) {
+                        data.itens.forEach(item => {
+                            itemsHtml += `
+                            <div class="card mb-2">
+                                <div class="card-body">
+                                    <div class="row align-items-center">
+                                        <div class="col-1"><input class="form-check-input item-checkbox" type="checkbox" name="itens_selecionados" value="${item.id}"></div>
+                                        <div class="col-4"><strong>${item.descricao}</strong></div>
+                                        <div class="col-2"><small class="text-muted">Pendente: ${item.quantidade_pendente}</small></div>
+                                        <div class="col-2"><input type="number" name="quantidade_recebida_${item.id}" class="form-control form-control-sm" placeholder="Qtd." step="0.01" max="${item.quantidade_pendente}" min="0"></div>
+                                        <div class="col-3"><input type="text" name="observacoes_${item.id}" class="form-control form-control-sm" placeholder="Obs. item"></div>
+                                    </div>
+                                </div>
+                            </div>`;
+                        });
+                    } else {
+                        itemsHtml = '<p class="text-center text-danger">Todos os itens desta SC já foram recebidos.</p>';
+                    }
+                    itensList.innerHTML = itemsHtml;
+                } else {
+                    detalhesContent.innerHTML = '<p class="text-center text-danger">Erro ao carregar detalhes.</p>';
+                    itensList.innerHTML = '<p class="text-center text-danger">Erro ao carregar itens.</p>';
+                }
+            });
+    });
+
+    // Lógica para contagem e habilitação do botão
+    document.body.addEventListener('change', function(e) {
+        if (e.target.classList.contains('item-checkbox')) {
+            const count = document.querySelectorAll('.item-checkbox:checked').length;
+            btnConfirmar.textContent = `Confirmar Recebimento (${count} item${count !== 1 ? 's' : ''})`;
+            btnConfirmar.disabled = count === 0;
+        }
+    });
+    
+    document.getElementById('btn-selecionar-todos').addEventListener('click', () => {
+        document.querySelectorAll('.item-checkbox').forEach(cb => cb.checked = true);
+        document.querySelector('.item-checkbox').dispatchEvent(new Event('change'));
+    });
+
+    document.getElementById('btn-desmarcar-todos').addEventListener('click', () => {
+        document.querySelectorAll('.item-checkbox').forEach(cb => cb.checked = false);
+        document.querySelector('.item-checkbox').dispatchEvent(new Event('change'));
+    });
+});
+
+function updateFileName(input) {
+    const uploadBox = input.parentElement;
+    const fileNameSpan = uploadBox.querySelector('.file-name');
+    const uploadTextSpan = uploadBox.querySelector('.upload-text');
+    if (input.files.length > 0) {
+        fileNameSpan.textContent = input.files[0].name;
+        uploadTextSpan.textContent = 'Alterar arquivo';
+    } else {
+        fileNameSpan.textContent = '';
+        uploadTextSpan.textContent = 'Clique para anexar';
+    }
+}
+</script>
+{% endblock %}

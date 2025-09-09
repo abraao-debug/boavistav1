@@ -1,0 +1,45 @@
+{% extends 'materiais/base.html' %}
+{% block title %}Dashboard - Almoxarife{% endblock %}
+
+{% block content %}
+<style>
+    {% include 'materiais/styles_dashboard.css' %}
+</style>
+
+<div class="mb-4">
+    <h3>Olá, {{ user.get_full_name|default:user.username }}!</h3>
+    <p class="text-muted">Bem-vindo ao sistema de gestão de materiais.</p>
+</div>
+
+{% include 'materiais/_cards_status.html' %}
+
+<div class="row">
+    <div class="col-md-6 mb-3">
+        <a href="{% url 'materiais:nova_solicitacao' %}" class="main-action-card card-solicitacao mb-3">
+            <div class="icon"><i class="fas fa-file-alt"></i></div>
+            <div class="card-text">
+                <h5>Nova Solicitação</h5>
+                <p>Criar nova solicitação de compra</p>
+            </div>
+        </a>
+        <div class="d-grid">
+            <a href="{% url 'materiais:minhas_solicitacoes' %}" class="btn btn-outline-secondary">
+                <i class="fas fa-list"></i> Minhas Solicitações
+            </a>
+        </div>
+    </div>
+    <div class="col-md-6 mb-3">
+        <a href="{% url 'materiais:registrar_recebimento' %}" class="main-action-card card-receber mb-3">            <div class="icon"><i class="fas fa-box-open"></i></div>
+            <div class="card-text">
+                <h5>Receber Material</h5>
+                <p>Confirmar recebimento de materiais</p>
+            </div>
+        </a>
+        <div class="d-grid">
+            <a href="{% url 'materiais:historico_recebimentos' %}" class="btn btn-outline-secondary">
+                <i class="fas fa-history"></i> Histórico de Recebimentos
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

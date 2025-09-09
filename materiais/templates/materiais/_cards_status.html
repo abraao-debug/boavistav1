@@ -1,0 +1,53 @@
+<div class="mb-5">
+    <h4 class="mb-3">Status das Solicitações da Obra</h4>
+    <div class="row">
+        <div class="col-6 col-md-4 col-lg mb-3">
+             <a href="{% url 'materiais:lista_solicitacoes' %}?status=pendente_aprovacao" class="status-card-link">
+                <div class="status-card status-aberto">
+                    <span class="count">{{ em_aberto | default:0 }}</span>
+                    <p class="title"><i class="fas fa-file-invoice status-icon"></i> Em Aberto</p>
+                </div>
+            </a>
+        </div>
+        <div class="col-6 col-md-4 col-lg mb-3">
+             <a href="{% url 'materiais:lista_solicitacoes' %}?status=aprovada" class="status-card-link">
+                <div class="status-card status-aprovado">
+                    <span class="count">{{ aprovado | default:0 }}</span>
+                    <p class="title"><i class="fas fa-check status-icon"></i> Aprovado</p>
+                </div>
+            </a>
+        </div>
+        <div class="col-6 col-md-4 col-lg mb-3">
+            <a href="{% url 'materiais:lista_solicitacoes' %}?status=em_cotacao" class="status-card-link">
+                <div class="status-card status-cotacao">
+                    <span class="count">{{ em_cotacao | default:0 }}</span>
+                    <p class="title"><i class="fas fa-calculator status-icon"></i> Em Cotação</p>
+                </div>
+            </a>
+        </div>
+        <div class="col-6 col-md-4 col-lg mb-3">
+            <a href="{% url 'materiais:lista_solicitacoes' %}?status=finalizada" class="status-card-link">
+                <div class="status-card status-requisicoes">
+                    <span class="count">{{ requisicoes | default:0 }}</span>
+                    <p class="title"><i class="fas fa-clipboard-list status-icon"></i> Requisições</p>
+                </div>
+            </a>
+        </div>
+        <div class="col-6 col-md-4 col-lg mb-3">
+            <a href="{% url 'materiais:lista_solicitacoes' %}?status=a_caminho" class="status-card-link">
+                <div class="status-card status-caminho">
+                    <span class="count">{{ a_caminho | default:0 }}</span>
+                    <p class="title"><i class="fas fa-truck status-icon"></i> A Caminho</p>
+                </div>
+            </a>
+        </div>
+        <div class="col-6 col-md-4 col-lg mb-3">
+            <a href="{% url 'materiais:lista_solicitacoes' %}?status=recebida" class="status-card-link">
+                <div class="status-card status-entregue">
+                    <span class="count">{{ entregue | default:0 }}</span>
+                    <p class="title"><i class="fas fa-check-circle status-icon"></i> Entregue</p>
+                </div>
+            </a>
+        </div>
+    </div>
+</div>

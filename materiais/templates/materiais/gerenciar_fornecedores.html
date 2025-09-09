@@ -1,0 +1,121 @@
+{% extends 'materiais/base.html' %}
+{% block title %}Gerenciar Fornecedores{% endblock %}
+
+{% block content %}
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+
+<div class="row">
+    <div class="col-12">
+        <h2><i class="fas fa-truck"></i> Gerenciar Fornecedores</h2>
+        <p class="text-muted">Cadastrar e gerenciar fornecedores</p>
+        <hr>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header">
+        <h5><i class="fas fa-plus-circle"></i> Novo Fornecedor</h5>
+    </div>
+    <div class="card-body">
+        <form method="post">
+            {% csrf_token %}
+            <h6><i class="fas fa-building"></i> Dados da Empresa</h6><hr>
+            <div class="row">
+                <div class="col-md-4 mb-3"><label for="nome_fantasia" class="form-label">Nome Fantasia *</label><input type="text" class="form-control" id="nome_fantasia" name="nome_fantasia" required></div>
+                <div class="col-md-5 mb-3"><label for="razao_social" class="form-label">Razão Social *</label><input type="text" class="form-control" id="razao_social" name="razao_social" required></div>
+                <div class="col-md-3 mb-3"><label for="cnpj" class="form-label">CNPJ *</label><input type="text" class="form-control" id="cnpj" name="cnpj" placeholder="00.000.000/0000-00" required></div>
+            </div>
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label for="tipo" class="form-label">Tipo *</label>
+                    <select class="form-select" id="tipo" name="tipo" required>
+                        <option value="material">Material</option>
+                        <option value="servico">Serviço</option>
+                        <option value="ambos">Ambos</option>
+                    </select>
+                </div>
+                <div class="col-md-8 mb-3">
+                    <label for="produtos_fornecidos" class="form-label">Produtos/Serviços Fornecidos</label>
+                    <select class="form-select" id="produtos_fornecidos" name="produtos_fornecidos" multiple>
+                        {% for subcat in subcategorias %}<option value="{{ subcat.id }}">{{ subcat }}</option>{% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <h6 class="mt-3"><i class="fas fa-user-tie"></i> Contato Principal</h6><hr>
+            <div class="row">
+                <div class="col-md-4 mb-3"><label for="contato_nome" class="form-label">Nome</label><input type="text" class="form-control" id="contato_nome" name="contato_nome"></div>
+                <div class="col-md-4 mb-3"><label for="email" class="form-label">E-mail</label><input type="email" class="form-control" id="email" name="email"></div>
+                <div class="col-md-2 mb-3"><label for="contato_telefone" class="form-label">Telefone</label><input type="text" class="form-control" id="contato_telefone" name="contato_telefone"></div>
+                <div class="col-md-2 mb-3"><label for="contato_whatsapp" class="form-label">WhatsApp</label><input type="text" class="form-control" id="contato_whatsapp" name="contato_whatsapp"></div>
+            </div>
+            
+            <h6 class="mt-3"><i class="fas fa-map-marker-alt"></i> Endereço</h6><hr>
+            <div class="row">
+                <div class="col-md-2 mb-3"><label for="cep" class="form-label">CEP</label><input type="text" class="form-control" id="cep" name="cep"></div>
+                <div class="col-md-8 mb-3"><label for="logradouro" class="form-label">Logradouro</label><input type="text" class="form-control" id="logradouro" name="logradouro"></div>
+                <div class="col-md-2 mb-3"><label for="numero" class="form-label">Número</label><input type="text" class="form-control" id="numero" name="numero"></div>
+            </div>
+             <div class="row">
+                <div class="col-md-4 mb-3"><label for="bairro" class="form-label">Bairro</label><input type="text" class="form-control" id="bairro" name="bairro"></div>
+                <div class="col-md-4 mb-3"><label for="cidade" class="form-label">Cidade</label><input type="text" class="form-control" id="cidade" name="cidade"></div>
+                <div class="col-md-4 mb-3"><label for="estado" class="form-label">UF</label><input type="text" class="form-control" id="estado" name="estado" maxlength="2"></div>
+            </div>
+
+            <button type="submit" class="btn btn-success mt-3"><i class="fas fa-save"></i> Cadastrar Fornecedor</button>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header"><h5><i class="fas fa-list"></i> Fornecedores Cadastrados ({{ fornecedores.count }})</h5></div>
+    <div class="card-body">
+        {% if fornecedores %}
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Nome Fantasia</th>
+                            <th>CNPJ</th>
+                            <th>Contato</th>
+                            <th>Tipo</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for fornecedor in fornecedores %}
+                        <tr>
+                            <td><strong>{{ fornecedor.nome_fantasia }}</strong><small class="d-block text-muted">{{ fornecedor.razao_social }}</small></td>
+                            <td>{{ fornecedor.cnpj }}</td>
+                            <td>{{ fornecedor.contato_nome|default_if_none:'' }}<small class="d-block text-muted">{{ fornecedor.contato_telefone|default_if_none:'' }}</small></td>
+                            <td>{{ fornecedor.get_tipo_display }}</td>
+                            <td>{% if fornecedor.ativo %}<span class="badge bg-success">Ativo</span>{% else %}<span class="badge bg-danger">Inativo</span>{% endif %}</td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary"><i class="fas fa-edit"></i></button>
+                                <button class="btn btn-sm btn-outline-warning"><i class="fas fa-pause"></i></button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="text-center text-muted p-4"><p>Nenhum fornecedor cadastrado ainda.</p></div>
+        {% endif %}
+    </div>
+</div>
+
+<a href="{% url 'materiais:dashboard' %}" class="btn btn-secondary mt-3"><i class="fas fa-arrow-left"></i> Voltar ao Dashboard</a>
+{% endblock %}
+
+{% block javascript %}
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script>
+$(document).ready(function() {
+    $('#produtos_fornecidos').select2({
+        placeholder: "Selecione as categorias que este fornecedor atende..."
+    });
+});
+</script>
+{% endblock %}

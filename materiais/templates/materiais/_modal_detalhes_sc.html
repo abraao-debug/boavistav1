@@ -1,0 +1,185 @@
+<div class="modal fade" id="modalDetalhesSC" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalTitle">Detalhes da SC</h5>
+        <span id="modalUrgenteBadge" class="ms-3"></span>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body bg-light">
+        <div class="container-fluid">
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h6><i class="fas fa-info-circle"></i> Informações Gerais</h6>
+                    <hr>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <strong>Solicitante:</strong> <span id="modalSolicitante"></span><br>
+                            <strong>Data Criação:</strong> <span id="modalDataCriacao"></span>
+                        </div>
+                        <div class="col-md-6">
+                            <strong>Obra:</strong> <span id="modalObra"></span><br>
+                            <strong>Data Necessária:</strong> <span id="modalDataNecessaria"></span>
+                        </div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-12">
+                            <strong>Destino de Entrega:</strong> <span id="modalDestino"></span>
+                        </div>
+                    </div>
+                    <strong class="mt-2 d-block">Observações:</strong>
+                    <p id="modalObservacoes" class="text-muted"></p>
+                </div>
+            </div>
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h6><i class="fas fa-box"></i> Itens (<span id="modalItemCount"></span>)</h6>
+                    <hr>
+                    <div id="modalItensLista" class="list-group"></div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-body">
+                    <h6><i class="fas fa-history"></i> Histórico da Solicitação</h6>
+                    <hr>
+                    <div id="modalHistoricoLista"></div>
+                </div>
+            </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <div id="modalFooterContent" class="w-100 d-flex justify-content-between"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="finalConfirmModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Confirmar Início de Cotação</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><p>Tem certeza que deseja mover a solicitação abaixo para a etapa de cotação?</p><p><strong>SC:</strong> <span id="finalConfirmScName"></span></p><div class="alert alert-warning small"><strong>Atenção:</strong> Após a confirmação, não será mais possível editar os itens e informações. A SC será movida para a aba "Em Cotação".</div></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><a href="#" id="finalConfirmLink" class="btn btn-success">Confirmar e Iniciar</a></div></div></div>
+</div>
+
+<div class="modal fade" id="rejectConfirmModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header bg-danger text-white"><h5 class="modal-title"><i class="fas fa-exclamation-triangle"></i> Confirmar Rejeição</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body"><p>Tem certeza que deseja **rejeitar** a solicitação abaixo? Esta ação não pode ser desfeita.</p><p><strong>SC:</strong> <span id="rejectScName"></span></p><div class="mb-3"><label for="rejectReason" class="form-label">Motivo da Rejeição (opcional):</label><textarea class="form-control" id="rejectReason" rows="3"></textarea></div></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button type="button" id="finalRejectBtn" class="btn btn-danger">Confirmar Rejeição</button></div></div></div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const modalDetalhesSC = document.getElementById('modalDetalhesSC');
+
+    function getHistoryStyle(action) {
+        let badgeClass = 'status-badge badge-finalizada'; let iconClass = 'text-secondary';
+        action = action.toLowerCase();
+        if (action.includes('criada') || action.includes('rejeitada')) { badgeClass = 'status-badge badge-aberto'; iconClass = 'text-danger'; }
+        else if (action.includes('aprova')) { badgeClass = 'status-badge badge-aprovado'; iconClass = 'text-success'; }
+        else if (action.includes('cotação')) { badgeClass = 'status-badge badge-cotacao'; iconClass = 'text-warning'; }
+        else if (action.includes('finalizada')) { badgeClass = 'status-badge badge-finalizada'; iconClass = 'text-muted'; }
+        else if (action.includes('recebido')) { badgeClass = 'status-badge badge-entregue'; iconClass = 'text-success'; }
+        return { badgeClass, iconClass };
+    }
+
+    if (modalDetalhesSC) {
+        modalDetalhesSC.addEventListener('show.bs.modal', function(event) {
+            const button = event.relatedTarget;
+            const solicitacaoId = button.getAttribute('data-sc-id');
+            const modalType = button.getAttribute('data-modal-type');
+            
+            const modalTitle = modalDetalhesSC.querySelector('#modalTitle');
+            const modalUrgenteBadge = modalDetalhesSC.querySelector('#modalUrgenteBadge');
+            const footerContent = document.getElementById('modalFooterContent');
+            
+            modalTitle.textContent = 'Carregando detalhes...';
+            modalUrgenteBadge.innerHTML = '';
+            footerContent.innerHTML = '';
+            // Limpa o conteúdo anterior para evitar mostrar dados antigos
+            document.getElementById('modalSolicitante').textContent = '';
+            document.getElementById('modalObra').textContent = '';
+            document.getElementById('modalDataCriacao').textContent = '';
+            document.getElementById('modalDataNecessaria').textContent = '';
+            document.getElementById('modalDestino').textContent = ''; // Limpa o destino
+            document.getElementById('modalObservacoes').textContent = '';
+            document.getElementById('modalItensLista').innerHTML = '';
+            document.getElementById('modalHistoricoLista').innerHTML = '';
+
+            fetch(`/api/solicitacao/${solicitacaoId}/detalhes/`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        modalTitle.textContent = 'Erro';
+                        modalDetalhesSC.querySelector('.modal-body').textContent = data.error;
+                        return;
+                    }
+                    
+                    modalTitle.textContent = `${data.nome_descritivo}`;
+                    if (data.is_emergencial) {
+                        modalUrgenteBadge.innerHTML = '<span class="badge bg-danger"><i class="fas fa-exclamation-triangle"></i> URGENTE</span>';
+                    }
+                    
+                    document.getElementById('modalSolicitante').textContent = data.solicitante;
+                    document.getElementById('modalObra').textContent = data.obra;
+                    document.getElementById('modalDataCriacao').textContent = data.data_criacao;
+                    document.getElementById('modalDataNecessaria').textContent = data.data_necessaria;
+                    document.getElementById('modalDestino').textContent = data.destino; // Preenche o destino
+                    document.getElementById('modalObservacoes').textContent = data.observacoes;
+                    
+                    const itensLista = document.getElementById('modalItensLista');
+                    document.getElementById('modalItemCount').textContent = data.itens.length;
+                    data.itens.forEach(item => {
+                        itensLista.innerHTML += `<div class="list-group-item"><div class="d-flex w-100 justify-content-between"><h6 class="mb-1">${item.descricao}</h6></div><p class="mb-1">${item.quantidade} ${item.unidade} - ${item.categoria}</p></div>`;
+                    });
+
+                    const historicoLista = document.getElementById('modalHistoricoLista');
+                    data.historico.forEach(evento => {
+                        const styles = getHistoryStyle(evento.status);
+                        historicoLista.innerHTML += `<div class="d-flex mb-3"><div class="me-3 pt-1"><i class="fas fa-circle ${styles.iconClass}"></i></div><div><strong class="${styles.badgeClass}" style="padding: .2em .5em; font-size: .8em;">${evento.status}</strong> - <small class="text-muted">${evento.timestamp}</small><div class="fs-sm">${evento.usuario}</div><div class="fs-sm text-muted">${evento.detalhes}</div></div></div>`;
+                    });
+
+                    if (modalType === 'action') {
+                        const editUrl = `{% url 'materiais:escritorio_editar_sc' 0 %}`.replace('0', solicitacaoId);
+                        footerContent.innerHTML = `<div><a href="${editUrl}" class="btn btn-outline-secondary"><i class="fas fa-edit"></i> Editar</a><button type="button" class="btn btn-outline-danger" onclick="abrirModalRejeicao(${solicitacaoId}, '${data.nome_descritivo}')"><i class="fas fa-times"></i> Rejeitar</button></div><button type="button" class="btn btn-success" onclick="confirmarInicioCotacao(${solicitacaoId}, '${data.nome_descritivo}')"><i class="fas fa-check"></i> Iniciar Cotação</button>`;
+                    } else {
+                        footerContent.innerHTML = '<button type="button" class="btn btn-secondary ms-auto" data-bs-dismiss="modal">Fechar</button>';
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro ao buscar detalhes da solicitação:', error);
+                    modalTitle.textContent = 'Erro de Conexão';
+                });
+        });
+    }
+
+    window.confirmarInicioCotacao = function(solicitacaoId, solicitacaoName) {
+        const firstModalInstance = bootstrap.Modal.getInstance(document.getElementById('modalDetalhesSC'));
+        firstModalInstance.hide();
+        const confirmModalEl = document.getElementById('finalConfirmModal');
+        const confirmModal = bootstrap.Modal.getOrCreateInstance(confirmModalEl);
+        confirmModalEl.querySelector('#finalConfirmScName').textContent = solicitacaoName;
+        confirmModalEl.querySelector('#finalConfirmLink').href = `/marcar-em-cotacao/${solicitacaoId}/`;
+        confirmModal.show();
+    }
+    
+    const rejectModalEl = document.getElementById('rejectConfirmModal');
+    const rejectModal = new bootstrap.Modal(rejectModalEl);
+
+    window.abrirModalRejeicao = function(solicitacaoId, solicitacaoName) {
+        const firstModalInstance = bootstrap.Modal.getInstance(document.getElementById('modalDetalhesSC'));
+        if (firstModalInstance && firstModalInstance._isShown) firstModalInstance.hide();
+        
+        rejectModalEl.querySelector('#rejectScName').textContent = solicitacaoName;
+        rejectModalEl.querySelector('#rejectReason').value = '';
+        const confirmBtn = rejectModalEl.querySelector('#finalRejectBtn');
+        confirmBtn.onclick = () => executarRejeicao(solicitacaoId);
+        
+        rejectModal.show();
+    }
+
+    function executarRejeicao(solicitacaoId) {
+        const motivo = document.getElementById('rejectReason').value;
+        const form = document.getElementById('rejectForm');
+        if (form) {
+            document.getElementById('rejectMotivo').value = motivo;
+            form.action = `/rejeitar-pelo-escritorio/${solicitacaoId}/`;
+            form.submit();
+        }
+    }
+});
+</script>

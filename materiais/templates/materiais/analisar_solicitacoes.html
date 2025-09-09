@@ -1,0 +1,292 @@
+{% extends 'materiais/base.html' %}
+{% load materiais_extras %}
+
+{% block title %}Analisar Solicitações - Gestão de Obra{% endblock %}
+
+{% block content %}
+<style>
+    {% include 'materiais/styles_dashboard.css' %}
+</style>
+
+<div class="d-flex align-items-center mb-3">
+    <a href="{% url 'materiais:dashboard' %}" class="btn btn-secondary me-3">
+        <i class="fas fa-arrow-left"></i> Voltar
+    </a>
+    <div>
+        <h4 class="mb-0">Analisar Solicitações</h4>
+        <p class="text-muted mb-0">Solicitações pendentes de aprovação na sua obra.</p>
+    </div>
+</div>
+<hr class="mb-4">
+{% if solicitacoes_pendentes %}
+    {% for solicitacao in solicitacoes_pendentes %}
+    <div class="card mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <div>
+                <h5 class="mb-0">{{ solicitacao.numero }}</h5>
+                <small class="text-muted">
+                Solicitado por: {{ solicitacao.solicitante.get_full_name|default:solicitacao.solicitante.username }} 
+                em {{ solicitacao.data_criacao|date:"d/m/Y H:i" }}
+                </small>
+            </div>
+            <span class="status-badge badge-aberto">{{ solicitacao.get_status_display }}</span>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <p><strong>Obra:</strong> {{ solicitacao.obra.nome|default:"-" }}</p>
+                    <p><strong>Data Necessidade:</strong> {{ solicitacao.data_necessidade|date:"d/m/Y" }}</p>
+                </div>
+                <div class="col-md-6">
+                    <p><strong>Justificativa:</strong></p>
+                    <p>{{ solicitacao.justificativa }}</p>
+                </div>
+            </div>
+            
+            <h6><strong>Itens Solicitados:</strong></h6>
+            <div class="table-responsive">
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>Descrição</th>
+                            <th>Quantidade</th>
+                            <th>Unidade</th>
+                            <th>Observações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in solicitacao.itens.all %}
+                        <tr>
+                            <td>{{ item.descricao }}</td>
+                            <td>{{ item.quantidade }}</td>
+                            <td>{{ item.unidade }}</td>
+                            <td>{{ item.observacoes|default:"-" }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="d-flex gap-2 mt-3">
+                <button class="btn btn-success" onclick="aprovarSolicitacao({{ solicitacao.id }})">
+                    <i class="fas fa-check"></i> Aprovar
+                </button>
+                <button class="btn btn-danger" onclick="rejeitarSolicitacao({{ solicitacao.id }})">
+                    <i class="fas fa-times"></i> Rejeitar
+                </button>
+                <button class="btn btn-warning" onclick="aprovarParcial({{ solicitacao.id }})">
+                    <i class="fas fa-edit"></i> Aprovação Parcial
+                </button>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+{% else %}
+    <div class="card">
+        <div class="card-body text-center p-5">
+            <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
+            <h5>Nenhuma solicitação pendente</h5>
+            <p class="text-muted">Todas as solicitações foram analisadas!</p>
+        </div>
+    </div>
+{% endif %}
+
+<div class="modal fade" id="modalAprovacaoParcial" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-edit"></i> Aprovação Parcial
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="dadosSolicitacao" class="mb-3">
+                    </div>
+                
+                <h6><strong>Selecione os itens para aprovar:</strong></h6>
+                <form id="formAprovacaoParcial">
+                    <div id="listaItens" class="mb-3">
+                        </div>
+                    
+                    <div class="mb-3">
+                        <label for="observacoesAprovacao" class="form-label">Observações (opcional):</label>
+                        <textarea class="form-control" id="observacoesAprovacao" name="observacoes" rows="3" 
+                                  placeholder="Digite observações sobre a aprovação parcial..."></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+                <button type="button" class="btn btn-warning" onclick="confirmarAprovacaoParcial()">
+                    <i class="fas fa-check"></i> Aprovar Selecionados
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>  
+let solicitacaoAtual = null;
+
+function aprovarSolicitacao(id) {
+    if (confirm('Tem certeza que deseja aprovar esta solicitação?')) { 
+        fetch(`/aprovar-solicitacao/${id}/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken'),
+                'Content-Type': 'application/json',
+            },
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert(data.message);
+                location.reload();
+            } else {
+                alert('Erro: ' + data.message);
+            }
+        })
+        .catch(error => {
+            alert('Erro ao processar solicitação');
+            console.error('Error:', error);
+        });
+    }
+}
+  
+function rejeitarSolicitacao(id) {
+    const observacoes = prompt('Motivo da rejeição (opcional):');
+    if (observacoes !== null) {
+        const formData = new FormData();
+        formData.append('observacoes', observacoes);
+        
+        fetch(`/rejeitar-solicitacao/${id}/`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert(data.message);
+                location.reload();
+            } else {
+                alert('Erro: ' + data.message);
+            }
+        })
+        .catch(error => {
+            alert('Erro ao processar solicitação');
+            console.error('Error:', error);
+        });
+    }
+}
+  
+function aprovarParcial(id) {
+    fetch(`/api/solicitacao-itens/${id}/`)
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            mostrarModalAprovacaoParcial(data.solicitacao, data.itens);
+        } else {
+            alert('Erro ao carregar itens: ' + data.message);
+        }
+    })
+    .catch(error => {
+        alert('Erro ao carregar itens');
+        console.error('Error:', error);
+    });
+}
+
+function mostrarModalAprovacaoParcial(solicitacao, itens) {
+    solicitacaoAtual = solicitacao;
+    document.getElementById('dadosSolicitacao').innerHTML = `
+        <div class="alert alert-info">
+            <strong>SC:</strong> ${solicitacao.numero} | 
+            <strong>Obra:</strong> ${solicitacao.obra} | 
+            <strong>Solicitante:</strong> ${solicitacao.solicitante}
+        </div>
+    `;
+    
+    let htmlItens = '';
+    itens.forEach(item => {
+        htmlItens += `
+            <div class="form-check mb-2 p-3 border rounded">
+                <input class="form-check-input" type="checkbox" value="${item.id}" id="item_${item.id}" name="itens_aprovados[]">
+                <label class="form-check-label w-100" for="item_${item.id}">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <strong>${item.descricao}</strong>
+                        </div>
+                        <div class="col-md-2">
+                            <span class="badge bg-primary">${item.quantidade} ${item.unidade}</span>
+                        </div>
+                        <div class="col-md-4">
+                            <small class="text-muted">${item.observacoes || 'Sem observações'}</small>
+                        </div>
+                    </div>
+                </label>
+            </div>
+        `;
+    });
+    
+    document.getElementById('listaItens').innerHTML = htmlItens;
+    const modal = new bootstrap.Modal(document.getElementById('modalAprovacaoParcial'));
+    modal.show();
+}
+
+function confirmarAprovacaoParcial() {
+    const checkboxes = document.querySelectorAll('input[name="itens_aprovados[]"]:checked');
+    if (checkboxes.length === 0) {
+        alert('Selecione pelo menos um item para aprovar!');
+        return;
+    }
+    
+    const formData = new FormData();
+    checkboxes.forEach(checkbox => {
+        formData.append('itens_aprovados[]', checkbox.value);
+    });
+    
+    const observacoes = document.getElementById('observacoesAprovacao').value;
+    if (observacoes) {
+        formData.append('observacoes', observacoes);
+    }
+    
+    fetch(`/aprovar-parcial/${solicitacaoAtual.id}/`, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': getCookie('csrftoken') },
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('Erro: ' + data.message);
+        }
+    })
+    .catch(error => {
+        alert('Erro ao processar aprovação parcial');
+        console.error('Error:', error);
+    });
+}
+  
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}  
+</script>
+
+{% endblock %}

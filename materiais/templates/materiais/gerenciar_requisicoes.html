@@ -1,0 +1,219 @@
+{% extends 'materiais/base.html' %}
+{% block title %}Requisições de Material{% endblock %}
+
+{% block content %}
+<style>
+    {% include 'materiais/styles_dashboard.css' %}
+    .summary-card { padding: 0.75rem; transition: all 0.2s ease-in-out; border: 1px solid #e9ecef; background-color: #fff; }
+    .summary-card .count { font-size: 2rem; }
+    .summary-card .title { font-size: 0.9em; margin-top: 0.25rem; }
+    .summary-link.active .summary-card { transform: translateY(-5px); box-shadow: 0 4px 20px rgba(0,0,0,0.12); filter: brightness(95%); }
+    .summary-link { color: #212529; text-decoration: none; }
+    .rm-card { border-left: 4px solid #0d6efd; }
+    .status-assinatura { font-size: 0.8em; font-weight: bold; }
+</style>
+
+<div class="d-flex align-items-center mb-3">
+    <a href="{% url 'materiais:dashboard' %}" class="btn btn-secondary me-3"><i class="fas fa-arrow-left"></i> Voltar</a>
+    <div>
+        <h4 class="mb-0">Gerador de Requisições de Material</h4>
+        <p class="text-muted mb-0">Gerencie as RMs e assinaturas digitais.</p>
+    </div>
+</div>
+<hr class="mb-4">
+
+<div class="row mb-4 nav nav-tabs" id="summaryCardNav" role="tablist">
+    <div class="col-md-4 mb-3">
+        <a href="#pendentes" class="summary-link active" data-bs-toggle="tab" data-bs-target="#pendentes" role="tab">
+            <div class="status-card summary-card status-aberto">
+                <span class="count">{{ pendentes.count }}</span>
+                <p class="title"><i class="fas fa-pen-nib status-icon"></i> Pendentes de 1ª Assinatura</p>
+            </div>
+        </a>
+    </div>
+    <div class="col-md-4 mb-3">
+        <a href="#aguardando" class="summary-link" data-bs-toggle="tab" data-bs-target="#aguardando" role="tab">
+            <div class="status-card summary-card status-cotacao">
+                <span class="count">{{ aguardando_assinatura.count }}</span>
+                <p class="title"><i class="fas fa-user-clock status-icon"></i> Aguardando 2ª Assinatura</p>
+            </div>
+        </a>
+    </div>
+    <div class="col-md-4 mb-3">
+        <a href="#assinadas" class="summary-link" data-bs-toggle="tab" data-bs-target="#assinadas" role="tab">
+            <div class="status-card summary-card status-aprovado">
+                <span class="count">{{ assinadas_enviadas.count }}</span>
+                <p class="title"><i class="fas fa-check-double status-icon"></i> Assinadas / Prontas</p>
+            </div>
+        </a>
+    </div>
+</div>
+
+<div class="tab-content">
+  <div class="tab-pane container active" id="pendentes">
+    {% for rm in pendentes %}
+    <div class="card rm-card mb-3">
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-9">
+                    <h5 class="mb-1">{{ rm.numero }}</h5>
+                    <div class="d-flex gap-4">
+                        <span><strong>Fornecedor:</strong> {{ rm.cotacao_vencedora.fornecedor.nome_fantasia }}</span>
+                        <span><strong>Valor Total:</strong> <span class="text-success fw-bold">R$ {{ rm.valor_total|floatformat:2 }}</span></span>
+                    </div>
+                </div>
+                <div class="col-md-3 text-end">
+                    <span class="badge bg-warning text-dark status-assinatura">Pendente - Almoxarife</span>
+                </div>
+            </div>
+            <hr>
+            <div class="text-end mt-2">
+                <a href="{% url 'materiais:visualizar_rm_pdf' rm.id %}" class="btn btn-sm btn-outline-secondary" target="_blank">Visualizar RM</a>
+                
+                {% if request.user.perfil == 'almoxarife_escritorio' %}
+                <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#confirmarAssinaturaModal" data-rm-id="{{ rm.id }}" data-rm-numero="{{ rm.numero }}">
+                    Assinar Digitalmente
+                </button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% empty %}
+    <div class="text-center p-5 text-muted"><p>Nenhuma RM pendente de primeira assinatura.</p></div>
+    {% endfor %}
+  </div>
+
+  <div class="tab-pane container fade" id="aguardando">
+    {% for rm in aguardando_assinatura %}
+    <div class="card rm-card mb-3" style="border-left-color: #ffc107;">
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-9"><h5 class="mb-1">{{ rm.numero }}</h5><div class="d-flex gap-4"><span><strong>Fornecedor:</strong> {{ rm.cotacao_vencedora.fornecedor.nome_fantasia }}</span><span><strong>Valor Total:</strong> <span class="text-success fw-bold">R$ {{ rm.valor_total|floatformat:2 }}</span></span></div></div>
+                <div class="col-md-3 text-end"><span class="badge bg-info status-assinatura">Aguardando - Diretor</span></div>
+            </div>
+            <hr>
+            <div class="text-end mt-2">
+                <a href="{% url 'materiais:visualizar_rm_pdf' rm.id %}" class="btn btn-sm btn-outline-secondary" target="_blank">Visualizar RM</a>
+                
+                {% if request.user.perfil == 'diretor' %}
+                <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#confirmarAssinaturaModal" data-rm-id="{{ rm.id }}" data-rm-numero="{{ rm.numero }}">
+                    Assinar Digitalmente
+                </button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% empty %}
+    <div class="text-center p-5 text-muted"><p>Nenhuma RM aguardando a segunda assinatura.</p></div>
+    {% endfor %}
+  </div>
+
+<div class="tab-pane container fade" id="assinadas">
+    {% for rm in assinadas_enviadas %}
+     <div class="card rm-card mb-3" style="border-left-color: {% if rm.status_assinatura == 'enviada' %}#6c757d{% else %}#198754{% endif %};">
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-9">
+                    <h5 class="mb-1">{{ rm.numero }}</h5>
+                    <div class="d-flex gap-4">
+                        <span><strong>Fornecedor:</strong> {{ rm.cotacao_vencedora.fornecedor.nome_fantasia }}</span>
+                        <span><strong>Valor Total:</strong> <span class="text-success fw-bold">R$ {{ rm.valor_total|floatformat:2 }}</span></span>
+                    </div>
+                </div>
+                <div class="col-md-3 text-end">
+                    {% if rm.status_assinatura == 'assinada' %}
+                        <span class="badge bg-success status-assinatura">Assinada</span>
+                    {% elif rm.status_assinatura == 'enviada' %}
+                        <span class="badge bg-secondary status-assinatura">Enviada</span>
+                    {% endif %}
+                </div>
+            </div>
+            <hr>
+            <div class="text-end mt-2">
+                <a href="{% url 'materiais:visualizar_rm_pdf' rm.id %}" class="btn btn-sm btn-outline-secondary" target="_blank">Visualizar RM</a>
+
+                {% if rm.status_assinatura == 'assinada' %}
+                    <a href="{% url 'materiais:enviar_rm_fornecedor' rm.id %}" class="btn btn-sm btn-success">
+                        Enviar para Fornecedor
+                    </a>
+                {% else %}
+                    <span class="btn btn-sm btn-outline-secondary disabled">
+                        <i class="fas fa-check"></i> Já Enviada
+                    </span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% empty %}
+    <div class="text-center p-5 text-muted"><p>Nenhuma RM assinada ou pronta para envio.</p></div>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="modal fade" id="confirmarAssinaturaModal" tabindex="-1" aria-labelledby="confirmarAssinaturaModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <form id="formConfirmarAssinatura" method="POST">
+        {% csrf_token %}
+        <div class="modal-header">
+          <h5 class="modal-title" id="confirmarAssinaturaModalLabel">Confirmar Assinatura com Senha</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <p>Para confirmar a sua assinatura eletrônica na <strong>RM <span id="rmNumeroModal"></span></strong>, por favor, digite sua senha.</p>
+          
+          <div class="mb-3">
+              <label for="passwordInput" class="form-label">Sua Senha</label>
+              <input type="password" class="form-control" id="passwordInput" name="password" required autocomplete="current-password">
+          </div>
+
+          <div class="alert alert-warning small">
+              <strong>Atenção:</strong> Esta ação tem validade de registro e confirma sua aprovação. A RM avançará para a próxima etapa ou será finalizada.
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-success">Confirmar e Assinar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block javascript %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Lógica para ativar o card da aba ativa (já existente)
+    const summaryLinks = document.querySelectorAll('.summary-link');
+    summaryLinks.forEach(link => {
+        link.addEventListener('click', function(event) {
+            summaryLinks.forEach(l => l.classList.remove('active'));
+            event.currentTarget.classList.add('active');
+        });
+    });
+
+    // Nova lógica para o modal de assinatura
+    const confirmarAssinaturaModal = document.getElementById('confirmarAssinaturaModal');
+    if (confirmarAssinaturaModal) {
+        confirmarAssinaturaModal.addEventListener('show.bs.modal', function(event) {
+            const button = event.relatedTarget;
+            const rmId = button.getAttribute('data-rm-id');
+            const rmNumero = button.getAttribute('data-rm-numero');
+            
+            const form = confirmarAssinaturaModal.querySelector('#formConfirmarAssinatura');
+            const url = `{% url 'materiais:assinar_requisicao' 0 %}`.replace('0', rmId);
+            form.action = url;
+            
+            confirmarAssinaturaModal.querySelector('#rmNumeroModal').textContent = rmNumero;
+            
+            // Limpa o campo de senha e foca nele ao abrir
+            const passwordInput = confirmarAssinaturaModal.querySelector('#passwordInput');
+            passwordInput.value = '';
+            setTimeout(() => passwordInput.focus(), 500);
+        });
+    }
+});
+</script>
+{% endblock %}

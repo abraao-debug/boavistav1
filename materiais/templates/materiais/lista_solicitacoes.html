@@ -1,0 +1,104 @@
+{% extends 'materiais/base.html' %}
+{% load materiais_extras %}
+
+{% block title %}Minhas Solicitações - Gestão de Obra{% endblock %}
+
+{% block content %}
+<style>
+    {% include 'materiais/styles_dashboard.css' %}
+</style>
+
+<div class="d-flex align-items-center mb-3">
+    <a href="{% url 'materiais:dashboard' %}" class="btn btn-secondary me-3">
+        <i class="fas fa-arrow-left"></i> Voltar
+    </a>
+    <div>
+        <h4 class="mb-0">
+            {% if status_filtrado %}
+                Solicitações "{{ status_choices|get_item:status_filtrado }}"
+            {% else %}
+                Minhas Solicitações
+            {% endif %}
+        </h4>
+        <p class="text-muted mb-0">Veja e acompanhe todas as solicitações da sua obra.</p>
+    </div>
+</div>
+<hr class="mb-4">
+
+<div class="card">
+    <div class="card-body">
+        {% if solicitacoes %}
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th>Código</th>
+                            <th>Nome</th>
+                            <th>Obra</th>
+                            <th>Data Criação</th>
+                            <th>Status</th>
+                            <th>Itens</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for solicitacao in solicitacoes %}
+                        <tr>
+                            <td>
+                                {% if solicitacao.is_emergencial %}
+                                    <i class="fas fa-exclamation-triangle text-danger me-2" title="Solicitação Emergencial"></i>
+                                {% endif %}
+                                {{ solicitacao.numero }}
+                            </td>
+                            <td><strong>{{ solicitacao.nome_descritivo }}</strong></td>
+                            <td>{{ solicitacao.obra.nome|default:"-" }}</td>
+                            <td>{{ solicitacao.data_criacao|date:"d/m/Y H:i" }}</td>
+                            <td>
+                                {% if solicitacao.status == 'pendente_aprovacao' %}
+                                    <span class="status-badge badge-aberto">{{ solicitacao.get_status_display }}</span>
+                                {% elif solicitacao.status == 'aprovada' %}
+                                    <span class="status-badge badge-aprovado">{{ solicitacao.get_status_display }}</span>
+                                {% elif solicitacao.status == 'em_cotacao' %}
+                                    <span class="status-badge badge-cotacao">{{ solicitacao.get_status_display }}</span>
+                                {% elif solicitacao.status == 'cotacao_selecionada' %}
+                                    <span class="status-badge badge-cotacao-selecionada">{{ solicitacao.get_status_display }}</span>
+                                {% elif solicitacao.status == 'finalizada' %}
+                                    <span class="status-badge badge-finalizada">{{ solicitacao.get_status_display }}</span>
+                                {% elif solicitacao.status == 'a_caminho' %}
+                                    <span class="status-badge badge-caminho">{{ solicitacao.get_status_display }}</span>
+                                {% elif solicitacao.status == 'recebida' %}
+                                    <span class="status-badge badge-entregue">{{ solicitacao.get_status_display }}</span>
+                                {% elif solicitacao.status == 'rejeitada' %}
+                                    <span class="status-badge badge-rejeitada">{{ solicitacao.get_status_display }}</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">{{ solicitacao.get_status_display }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="badge bg-light text-dark border">{{ solicitacao.itens.count }} item{{ solicitacao.itens.count|pluralize:"s" }}</span>
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary btn-ver-detalhes" 
+                                        data-bs-toggle="modal" 
+                                        data-bs-target="#modalDetalhesSC"
+                                        data-sc-id="{{ solicitacao.id }}">
+                                    <i class="fas fa-eye"></i> Ver Detalhes
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="text-center p-5">
+                <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                <h5>Nenhuma solicitação encontrada</h5>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+{% include 'materiais/_modal_detalhes_sc.html' %}
+
+{% endblock %}

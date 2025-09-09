@@ -1,0 +1,110 @@
+{% extends 'materiais/base.html' %}
+{% block title %}Gerar E-mail de Cotação{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-11 col-xl-10">
+        <div class="card">
+            <div class="card-header text-center bg-light">
+                <h4 class="mb-0"><i class="fas fa-envelope-open-text text-primary"></i> E-mail Gerado</h4>
+                <p class="text-muted mb-0">Confirme o envio da cotação para o fornecedor.</p>
+            </div>
+            <div class="card-body p-4">
+                <div class="alert alert-info">
+                    <strong>Atenção:</strong> Este é um rascunho. Copie os dados e envie através do seu cliente de e-mail. Após o envio, clique em "Confirmar Envio Manual".
+                </div>
+
+                <div class="row g-4">
+                    <div class="col-lg-7">
+                        <div class="card h-100">
+                            <div class="card-body d-flex flex-column">
+                                <h5><i class="fas fa-envelope"></i> Envio Manual</h5>
+                                <p class="text-muted small">Copie os dados abaixo e cole no seu programa de e-mail para enviar.</p>
+                                <hr>
+                                <div class="mb-3">
+                                    <label class="form-label"><strong>E-mail do Fornecedor:</strong></label>
+                                    <div class="input-group">
+                                        <input type="text" id="emailFornecedor" class="form-control" value="{{ envio.fornecedor.email }}" readonly>
+                                        <button class="btn btn-outline-secondary" type="button" onclick="copiarTexto('emailFornecedor')">Copiar</button>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label"><strong>Assunto:</strong></label>
+                                    <div class="input-group">
+                                        <input type="text" id="emailAssunto" class="form-control" value="{{ email_subject }}" readonly>
+                                        <button class="btn btn-outline-secondary" type="button" onclick="copiarTexto('emailAssunto')">Copiar</button>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                      <label for="emailCorpo" class="form-label mb-0"><strong>Corpo do E-mail:</strong></label>
+                                      <button class="btn btn-sm btn-outline-secondary" type="button" onclick="copiarTexto('emailCorpo')">Copiar</button>
+                                    </div>
+                                    <textarea id="emailCorpo" class="form-control" rows="10" readonly>{{ email_body }}</textarea>
+                                </div>
+                                <div class="d-grid mt-auto">
+                                    <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#confirmarEnvioModal">
+                                        <i class="fas fa-check-circle"></i> Confirmar Envio Manual
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-5">
+                       <div class="card h-100">
+                           <div class="card-body">
+                               <h5><i class="fas fa-list-check"></i> Detalhes do Envio</h5>
+                               <hr>
+                               <p><strong>Fornecedor:</strong><br>{{ envio.fornecedor.nome }}</p>
+                               <p><strong>Prazo de Resposta:</strong><br>{{ envio.prazo_resposta|date:"d/m/Y"|default:"Não definido" }}</p>
+                               <p><strong>Forma de Pagamento Sugerida:</strong><br>{{ envio.get_forma_pagamento_display }}</p>
+                               <p><strong>Prazo de Pagamento Sugerido:</strong><br>{{ envio.prazo_pagamento }} dias</p>
+                           </div>
+                       </div>
+                    </div>
+                </div>
+            </div>
+             <div class="card-footer">
+                <a href="{{ url_retorno }}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left"></i> Voltar para Confirmação de Envios
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="confirmarEnvioModal" tabindex="-1" aria-labelledby="confirmarEnvioModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="confirmarEnvioModalLabel">Confirmar Envio</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p>Você confirma que copiou os dados e enviou o e-mail de cotação para <strong>{{ envio.fornecedor.nome }}</strong>?</p>
+        <p class="text-muted small">Esta ação irá mover a solicitação para o estágio "Aguardando Resposta".</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <a href="{% url 'materiais:confirmar_envio_manual' envio.id %}?next={{ url_retorno|urlencode }}" class="btn btn-success">
+            <i class="fas fa-check"></i> Sim, confirmo o envio
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function copiarTexto(elementId) {
+    const elemento = document.getElementById(elementId);
+    elemento.select();
+    try {
+        navigator.clipboard.writeText(elemento.value).then(function() {}, function() {
+            document.execCommand('copy');
+        });
+    } catch (err) {
+        document.execCommand('copy');
+    }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>RM {{ rm.numero }}</title>
+    <style>
+        @page { size: A4; margin: 1cm; }
+        body { font-family: 'Helvetica', 'Arial', sans-serif; font-size: 10pt; }
+        .cabecalho { text-align: center; border-bottom: 2px solid #333; padding-bottom: 10px; }
+        .cabecalho h1 { font-size: 18pt; margin: 0; }
+        .cabecalho p { font-size: 8pt; margin: 2px 0; }
+        .titulo-doc { font-size: 14pt; font-weight: bold; text-align: center; margin: 20px 0; }
+        .info-bloco { border: 1px solid #ccc; padding: 5px; margin-top: 15px; }
+        .info-bloco table { width: 100%; border-collapse: collapse; }
+        .info-bloco td { padding: 3px; font-size: 9pt; vertical-align: top; }
+        .info-bloco .label { font-weight: bold; width: 150px; }
+        .tabela-itens { width: 100%; margin-top: 20px; border-collapse: collapse; }
+        .tabela-itens th, .tabela-itens td { border: 1px solid #333; padding: 5px; text-align: center; }
+        .tabela-itens th { background-color: #f2f2f2; font-size: 9pt; }
+        .tabela-itens td { font-size: 9pt; }
+        .tabela-itens .descricao { text-align: left; width: 45%; }
+        .tabela-itens .numero { text-align: right; }
+        .tabela-itens .total-row { font-weight: bold; }
+        .rodape { margin-top: 50px; }
+        .rodape-assinaturas { display: flex; justify-content: space-between; margin-top: 40px; text-align: center; }
+        
+        /* --- CSS AJUSTADO PARA ALINHAMENTO --- */
+        .assinatura {
+            width: 30%;
+            display: flex; /* Transforma a coluna da assinatura em um container flex */
+            flex-direction: column; /* Organiza os itens de cima para baixo */
+        }
+        .assinatura-conteudo {
+            flex-grow: 1; /* Faz esta área crescer para ocupar o espaço vago */
+            min-height: 50px; /* Garante uma altura mínima para os blocos vazios */
+        }
+        .assinatura img {
+            display: block;
+            margin: 0 auto 5px auto;
+            max-height: 45px;
+            max-width: 150px;
+            object-fit: contain;
+        }
+        .dados-assinatura {
+            font-size: 8pt;
+            color: #333;
+            border-top: none !important;
+            margin-top: 0;
+            padding-top: 0;
+        }
+        .assinatura .linha-cargo {
+            margin-top: auto; /* Empurra a linha para o final do espaço disponível */
+            border-top: 1px solid #000;
+            padding-top: 5px;
+            font-size: 9pt;
+        }
+        /* --- FIM DO CSS AJUSTADO --- */
+
+    </style>
+</head>
+<body>
+    <div class="cabecalho">
+        <h1>{{ empresa.NOME }}</h1>
+        <p>{{ empresa.ENDERECO }}</p>
+        <p>CNPJ: {{ empresa.CNPJ }} | Telefone: {{ empresa.TELEFONE }} | E-mail: {{ empresa.EMAIL }}</p>
+    </div>
+
+    <h2 class="titulo-doc">REQUISIÇÃO DE MATERIAIS</h2>
+
+    <div class="info-bloco">
+        <table>
+            <tr>
+                <td class="label">RM Nº:</td><td>{{ rm.numero }}</td>
+                <td class="label">SC Nº:</td><td>{{ solicitacao.numero }}</td>
+            </tr>
+            <tr>
+                <td class="label">Data de Emissão:</td><td>{{ rm.data_criacao|date:"d/m/Y" }}</td>
+                <td class="label">Data Prevista p/ Entrega:</td><td>{{ rm.cotacao_vencedora.prazo_entrega|default:"__/__/____" }}</td>
+            </tr>
+             <tr>
+                <td class="label">Condição de Pagamento:</td><td colspan="3">{{ rm.cotacao_vencedora.condicao_pagamento|default:"Não informado" }}</td>
+            </tr>
+            <tr>
+                <td class="label">Solicitante:</td><td colspan="3">{{ solicitacao.solicitante.get_full_name|default:solicitacao.solicitante.username }}</td>
+            </tr>
+            <tr>
+                <td class="label">Obra:</td><td colspan="3">{{ solicitacao.obra.nome }} - {{ solicitacao.obra.endereco }}</td>
+            </tr>
+            <tr>
+                <td class="label">Destino da Entrega:</td>
+                <td colspan="3">{% if solicitacao.destino %}{{ solicitacao.destino.nome }}{% else %}Endereço da Obra{% endif %}</td>
+            </tr>
+            <tr>
+                <td class="label">Nome da SC:</td><td colspan="3">{{ solicitacao.nome_descritivo }}</td>
+            </tr>
+            <tr>
+                <td class="label">Fornecedor:</td><td colspan="3">{{ fornecedor.nome_fantasia }}</td>
+            </tr>
+            <tr>
+                <td class="label">Contato do Fornecedor:</td><td colspan="3">{{ fornecedor.contato_nome }} - {{ fornecedor.contato_telefone }} / {{ fornecedor.contato_whatsapp }}</td>
+            </tr>
+        </table>
+    </div>
+
+    <table class="tabela-itens">
+        <thead>
+            <tr>
+                <th>Item</th><th>Quant.</th><th>Unid.</th><th class="descricao">Descrição</th><th>Val. Unitário</th><th>Subtotal</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item_cotado in itens_cotados %}
+            {% with item_solicitado=item_cotado.item_solicitacao %}
+            <tr>
+                <td>{{ forloop.counter }}</td>
+                <td class="numero">{{ item_solicitado.quantidade|floatformat:"2" }}</td>
+                <td>{{ item_solicitado.unidade }}</td>
+                <td class="descricao">{{ item_solicitado.descricao }}</td>
+                <td class="numero">R$ {{ item_cotado.preco|floatformat:"2" }}</td>
+                <td class="numero">R$ {% widthratio item_cotado.preco 1 item_solicitado.quantidade as subtotal %}{{ subtotal|floatformat:"2" }}</td>
+            </tr>
+            {% endwith %}
+            {% endfor %}
+            <tr class="total-row">
+                <td colspan="5" style="text-align: right;">TOTAL</td>
+                <td class="numero">R$ {{ rm.valor_total|floatformat:"2" }}</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="rodape">
+        <p>Data de Geração da RM: {{ rm.data_criacao|date:"d/m/Y" }}</p>
+
+        <div class="rodape-assinaturas">
+            <div class="assinatura">
+                <div class="assinatura-conteudo">
+                    {% if rm.assinatura_almoxarife and rm.assinatura_almoxarife.assinatura_imagem %}
+                        <img src="{{ rm.assinatura_almoxarife.assinatura_imagem.url }}" alt="Assinatura do Comprador">
+                    {% endif %}
+                    {% if rm.assinatura_almoxarife %}
+                        <p class="dados-assinatura">
+                            <strong>Assinado Eletronicamente por:</strong><br>
+                            {{ rm.assinatura_almoxarife.get_full_name|default:rm.assinatura_almoxarife.username }}<br>
+                            em {{ rm.data_assinatura_almoxarife|date:"d/m/Y H:i:s" }}
+                        </p>
+                    {% endif %}
+                </div>
+                <p class="linha-cargo">Comprador</p>
+            </div>
+            <div class="assinatura">
+                <div class="assinatura-conteudo">
+                    {% if rm.assinatura_diretor and rm.assinatura_diretor.assinatura_imagem %}
+                        <img src="{{ rm.assinatura_diretor.assinatura_imagem.url }}" alt="Assinatura do Diretor">
+                    {% endif %}
+                    {% if rm.assinatura_diretor %}
+                        <p class="dados-assinatura">
+                            <strong>Assinado Eletronicamente por:</strong><br>
+                            {{ rm.assinatura_diretor.get_full_name|default:rm.assinatura_diretor.username }}<br>
+                            em {{ rm.data_assinatura_diretor|date:"d/m/Y H:i:s" }}
+                        </p>
+                    {% endif %}
+                </div>
+                <p class="linha-cargo">Diretor</p>
+            </div>
+             <div class="assinatura">
+                <div class="assinatura-conteudo">
+                    </div>
+                <p class="linha-cargo">Recebedor</p>
+             </div>
+        </div>
+        <p style="text-align: right; margin-top: 30px;">Teresina, ______ / ______ / ________</p>
+    </div>
+</body>
+</html>

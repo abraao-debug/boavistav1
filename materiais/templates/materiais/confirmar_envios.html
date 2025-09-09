@@ -1,0 +1,39 @@
+{% extends 'materiais/base.html' %}
+{% block title %}Confirmar Envios de Cotação{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-10">
+        <div class="card">
+            <div class="card-header text-center">
+                <h4 class="mb-0"><i class="fas fa-paper-plane text-success"></i> Cotações Registradas</h4>
+                <p class="text-muted mb-0">Agora, gere e envie os e-mails para os fornecedores selecionados.</p>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <strong>Próximo Passo:</strong> Para cada fornecedor abaixo, clique em "Gerar E-mail", copie os dados e envie. Após o envio, confirme a ação na página do e-mail.
+                </div>
+                
+                <ul class="list-group">
+                    {% for envio in envios %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <h5 class="mb-1">{{ envio.fornecedor.nome_fantasia }}</h5>
+                            <small class="text-muted">{{ envio.itens.count }} item(ns) na cotação</small>
+                        </div>
+                        <a href="{% url 'materiais:gerar_email_cotacao' envio.id %}" class="btn btn-primary">
+                           <i class="fas fa-envelope"></i> Gerar E-mail
+                        </a>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            <div class="card-footer text-center">
+                <a href="{% url 'materiais:gerenciar_cotacoes' %}?tab=aguardando" class="btn btn-secondary">
+                    Concluir e Voltar para Cotações
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

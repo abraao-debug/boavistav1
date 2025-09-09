@@ -1,0 +1,121 @@
+{% extends 'materiais/base.html' %}
+{% block title %}Editar Item: {{ item.descricao }}{% endblock %}
+
+{% block content %}
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js" defer></script>
+
+<style>
+    .select2-results__options {
+        max-height: 350px !important; 
+        overflow-y: auto !important;
+    }
+</style>
+
+<div class="row">
+    <div class="col-12">
+        <h2><i class="fas fa-edit"></i> Editar Item do Catálogo</h2>
+        <p class="text-muted">Altere os dados do item <strong>{{ item.codigo }}</strong></p>
+        <hr>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header"><h5><i class="fas fa-pencil-alt"></i> Dados do Item</h5></div>
+    <div class="card-body">
+        <form method="post">
+            {% csrf_token %}
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="categoria" class="form-label">Categoria *</label>
+                    <select class="form-select" id="categoria" name="categoria" required>
+                        <option value="">Selecione...</option>
+                        {% for cat in categorias_principais %}
+                            <option value="{{ cat.id }}" {% if cat.id == item.categoria.categoria_mae.id %}selected{% endif %}>
+                                {{ cat.nome }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label for="subcategoria" class="form-label">Subcategoria *</label>
+                    <select class="form-select" id="subcategoria" name="subcategoria" required>
+                        {% for subcat in subcategorias_atuais %}
+                            <option value="{{ subcat.id }}" {% if subcat.id == item.categoria.id %}selected{% endif %}>
+                                {{ subcat.nome }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-2 mb-3">
+                    <label class="form-label">Código</label>
+                    <input type="text" class="form-control" value="{{ item.codigo }}" disabled>
+                </div>
+                <div class="col-md-10 mb-3">
+                    <label for="descricao" class="form-label">Descrição do Item *</label>
+                    <input type="text" class="form-control" id="descricao" name="descricao" value="{{ item.descricao }}" required>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label for="unidade" class="form-label">Unidade de Medida *</label>
+                    <select class="form-select" id="unidade" name="unidade" required>
+                        {% for u in unidades %}
+                            <option value="{{ u.id }}" {% if u.id == item.unidade.id %}selected{% endif %}>{{ u }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-8 mb-3">
+                    <label for="tags" class="form-label">Tags (Opcional)</label>
+                    <select class="form-select" id="tags" name="tags" multiple>
+                        {% for tag in tags %}
+                            <option value="{{ tag.id }}" {% if tag in item.tags.all %}selected{% endif %}>{{ tag.nome }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="form-check form-switch mb-3">
+              <input class="form-check-input" type="checkbox" name="status" id="status" {% if item.ativo %}checked{% endif %}>
+              <label class="form-check-label" for="status">Item Ativo</label>
+            </div>
+            <a href="{% url 'materiais:cadastrar_itens' %}" class="btn btn-secondary">Cancelar</a>
+            <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Salvar Alterações</button>
+        </form>
+    </div>
+</div>
+
+<script>
+$(document).ready(function() {
+    $('#categoria, #subcategoria, #unidade, #tags').select2();
+    
+    $('#categoria').on('change', function() {
+        const categoriaId = $(this).val();
+        const subcategoriaSelect = $('#subcategoria');
+
+        subcategoriaSelect.empty().prop('disabled', true);
+        if (!categoriaId) {
+            subcategoriaSelect.append('<option value="">Aguardando seleção da Categoria...</option>').trigger('change');
+            return;
+        }
+        
+        subcategoriaSelect.append('<option value="">Carregando...</option>').trigger('change');
+        
+        fetch(`/api/subcategorias/${categoriaId}/`)
+            .then(response => response.json())
+            .then(data => {
+                subcategoriaSelect.empty().append('<option value="" selected>Selecione uma subcategoria...</option>');
+                $.each(data, function(i, sub) {
+                    subcategoriaSelect.append(new Option(sub.nome, sub.id));
+                });
+                subcategoriaSelect.prop('disabled', false).trigger('change');
+            })
+            .catch(error => {
+                console.error('Erro:', error);
+                subcategoriaSelect.empty().append('<option value="">Erro ao carregar</option>').trigger('change');
+            });
+    });
+});
+</script>
+{% endblock %}

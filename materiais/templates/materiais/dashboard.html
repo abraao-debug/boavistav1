@@ -1,0 +1,108 @@
+{% extends 'materiais/base.html' %}
+
+{% block title %}Dashboard - Gestão de Obra{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2><i class="fas fa-tachometer-alt"></i> Dashboard - {{ user.get_perfil_display }}</h2>
+        <hr>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-3">
+        <div class="card text-white bg-info">
+            <div class="card-body">
+                <h5><i class="fas fa-file-alt"></i> Minhas Solicitações</h5>
+                <h3>{{ total_solicitacoes }}</h3>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-9">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-list"></i> Menu Principal</h5>
+            </div>
+            <div class="card-body">
+                {% if user.perfil == 'almoxarife_obra' %}
+                    <!-- Menu Almoxarife da Obra -->
+                    <div class="row">
+                        <div class="col-md-6">
+                            <a href="{% url 'materiais:nova_solicitacao' %}" class="btn btn-success btn-lg w-100 mb-3">
+                                <i class="fas fa-plus"></i> Nova Solicitação
+                            </a>
+                        </div>
+                        <div class="col-md-6">
+                            <a href="{% url 'materiais:lista_solicitacoes' %}" class="btn btn-primary btn-lg w-100 mb-3">
+                                <i class="fas fa-list"></i> Minhas Solicitações
+                            </a>
+                        </div>
+                        <div class="col-md-6">
+                            <a href="#" class="btn btn-warning btn-lg w-100 mb-3">
+                                <i class="fas fa-truck"></i> Receber Material
+                            </a>
+                        </div>
+                        <div class="col-md-6">
+                            <a href="#" class="btn btn-info btn-lg w-100 mb-3">
+                                <i class="fas fa-clipboard-list"></i> Requisições de Material
+                            </a>
+                        </div>
+                    </div>
+                
+                {% elif user.perfil == 'engenheiro' %}
+                    <!-- Menu Engenheiro -->
+                    <div class="row">
+                        <div class="col-md-6">
+                            <a href="{% url 'materiais:nova_solicitacao' %}" class="btn btn-success btn-lg w-100 mb-3">
+                                <i class="fas fa-plus"></i> Nova Solicitação
+                            </a>
+                        </div>
+                        <div class="col-md-6">
+                            <a href="{% url 'materiais:lista_solicitacoes' %}" class="btn btn-primary btn-lg w-100 mb-3">
+                                <i class="fas fa-list"></i> Minhas Solicitações
+                            </a>
+                        </div>
+                        <div class="col-md-6">
+                            <a href="#" class="btn btn-warning btn-lg w-100 mb-3">
+                                <i class="fas fa-check-circle"></i> Analisar Solicitações
+                            </a>
+                        </div>
+                        <div class="col-md-6">
+                            <a href="#" class="btn btn-info btn-lg w-100 mb-3">
+                                <i class="fas fa-chart-bar"></i> Relatórios
+                            </a>
+                        </div>
+                    </div>
+                
+                {% elif user.perfil == 'almoxarife_escritorio' %}
+                    <!-- Menu Almoxarife do Escritório -->
+                    <div class="row">
+                        <div class="col-md-6">
+                            <a href="#" class="btn btn-primary btn-lg w-100 mb-3">
+                                <i class="fas fa-list"></i> Solicitações Aprovadas
+                            </a>
+                        </div>
+                        <div class="col-md-6">
+                            <a href="#" class="btn btn-success btn-lg w-100 mb-3">
+                                <i class="fas fa-dollar-sign"></i> Gerenciar Cotações
+                            </a>
+                        </div>
+                        <div class="col-md-6">
+                            <a href="#" class="btn btn-warning btn-lg w-100 mb-3">
+                                <i class="fas fa-truck"></i> Fornecedores
+                            </a>
+                        </div>
+                        <div class="col-md-6">
+                            <a href="#" class="btn btn-info btn-lg w-100 mb-3">
+                                <i class="fas fa-file-invoice"></i> Pedidos de Compra
+                            </a>
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

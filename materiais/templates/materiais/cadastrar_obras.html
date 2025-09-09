@@ -1,0 +1,103 @@
+{% extends 'materiais/base.html' %}
+
+{% block title %}Cadastrar Obras - Gestão de Obra{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2><i class="fas fa-building"></i> Cadastrar Obras</h2>
+        <p class="text-muted">Gerenciar obras disponíveis no sistema</p>
+        <hr>
+    </div>
+</div>
+
+<!-- Formulário de Cadastro -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5><i class="fas fa-plus-circle"></i> Nova Obra</h5>
+    </div>
+    <div class="card-body">
+        <form method="post">
+            {% csrf_token %}
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="nome" class="form-label">Nome da Obra</label>
+                        <input type="text" class="form-control" id="nome" name="nome" required>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="endereco" class="form-label">Endereço</label>
+                        <input type="text" class="form-control" id="endereco" name="endereco">
+                    </div>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-warning">
+                <i class="fas fa-save"></i> Cadastrar Obra
+            </button>
+        </form>
+    </div>
+</div>
+
+<!-- Lista de Obras -->
+<div class="card">
+    <div class="card-header">
+        <h5><i class="fas fa-list"></i> Obras Cadastradas ({{ obras.count }})</h5>
+    </div>
+    <div class="card-body">
+        {% if obras %}
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Nome</th>
+                            <th>Endereço</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for obra in obras %}
+                        <tr>
+                            <td><strong>{{ obra.nome }}</strong></td>
+                            <td>{{ obra.endereco|default:"-" }}</td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary" onclick="editarObra({{ obra.id }})">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger" onclick="excluirObra({{ obra.id }})">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="text-center text-muted">
+                <i class="fas fa-inbox fa-3x mb-3"></i>
+                <p>Nenhuma obra cadastrada ainda.</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="mt-3">
+    <a href="{% url 'materiais:dashboard' %}" class="btn btn-secondary">
+        <i class="fas fa-arrow-left"></i> Voltar ao Dashboard
+    </a>
+</div>
+
+<script>
+function editarObra(id) {
+    alert('Edição de obra em desenvolvimento...');
+}
+
+function excluirObra(id) {
+    if (confirm('Tem certeza que deseja excluir esta obra?')) {
+        alert('Exclusão de obra em desenvolvimento...');
+    }
+}
+</script>
+{% endblock %}

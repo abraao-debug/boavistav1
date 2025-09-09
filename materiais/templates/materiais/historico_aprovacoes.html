@@ -1,0 +1,94 @@
+{% extends 'materiais/base.html' %}
+{% load materiais_extras %} {% block title %}Histórico de Aprovações{% endblock %}
+
+{% block content %}
+<style>
+    {% include 'materiais/styles_dashboard.css' %}
+</style>
+
+<div class="d-flex align-items-center mb-3">
+    <a href="{% url 'materiais:dashboard' %}" class="btn btn-secondary me-3">
+        <i class="fas fa-arrow-left"></i> Voltar
+    </a>
+    <div>
+        <h4 class="mb-0">Meu Histórico de Aprovações</h4>
+        <p class="text-muted mb-0">Lista de todas as solicitações de compra que você aprovou.</p>
+    </div>
+</div>
+<hr class="mb-4">
+
+<div class="card">
+    <div class="card-body">
+        {% if solicitacoes %}
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th>Código SC</th>
+                            <th>Nome</th>
+                            <th>Obra</th>
+                            <th>Solicitante</th>
+                            <th>Data da Aprovação</th>
+                            <th>Status Atual</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for sc in solicitacoes %}
+                        <tr>
+                            <td>
+                                {% if sc.is_emergencial %}
+                                    <i class="fas fa-exclamation-triangle text-danger me-2" title="Solicitação Emergencial"></i>
+                                {% endif %}
+                                {{ sc.numero }}
+                            </td>
+                            <td><strong>{{ sc.nome_descritivo }}</strong></td>
+                            <td>{{ sc.obra.nome|default:"-" }}</td>
+                            <td>{{ sc.solicitante.get_full_name|default:sc.solicitante.username }}</td>
+                            <td>{{ sc.data_aprovacao|date:"d/m/Y H:i" }}</td>
+                            <td>
+                                {% if sc.status == 'pendente_aprovacao' %}
+                                    <span class="status-badge badge-aberto">{{ sc.get_status_display }}</span>
+                                {% elif sc.status == 'aprovada' %}
+                                    <span class="status-badge badge-aprovado">{{ sc.get_status_display }}</span>
+                                {% elif sc.status == 'em_cotacao' %}
+                                    <span class="status-badge badge-cotacao">{{ sc.get_status_display }}</span>
+                                {% elif sc.status == 'cotacao_selecionada' %}
+                                    <span class="status-badge badge-cotacao-selecionada">{{ sc.get_status_display }}</span>
+                                {% elif sc.status == 'finalizada' %}
+                                    <span class="status-badge badge-finalizada">{{ sc.get_status_display }}</span>
+                                {% elif sc.status == 'a_caminho' %}
+                                    <span class="status-badge badge-caminho">{{ sc.get_status_display }}</span>
+                                {% elif sc.status == 'recebida' %}
+                                    <span class="status-badge badge-entregue">{{ sc.get_status_display }}</span>
+                                {% elif sc.status == 'rejeitada' %}
+                                    <span class="status-badge badge-rejeitada">{{ sc.get_status_display }}</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">{{ sc.get_status_display }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary btn-ver-detalhes" 
+                                        data-bs-toggle="modal" 
+                                        data-bs-target="#modalDetalhesSC"
+                                        data-sc-id="{{ sc.id }}">
+                                    <i class="fas fa-eye"></i> Ver Detalhes
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="text-center p-5">
+                <i class="fas fa-check-circle fa-3x text-muted mb-3"></i>
+                <h5>Você ainda não aprovou nenhuma solicitação.</h5>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+{% include 'materiais/_modal_detalhes_sc.html' %}
+
+{% endblock %}

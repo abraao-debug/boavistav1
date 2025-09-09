@@ -1,0 +1,73 @@
+{% extends 'materiais/base.html' %}
+{% block title %}Histórico de Recebimentos - Gestão de Obra{% endblock %}
+
+{% block content %}
+<style>
+    {% include 'materiais/styles_dashboard.css' %}
+</style>
+
+<div class="d-flex align-items-center mb-3">
+    <a href="{% url 'materiais:dashboard' %}" class="btn btn-secondary me-3">
+        <i class="fas fa-arrow-left"></i> Voltar
+    </a>
+    <div>
+        <h4 class="mb-0">Histórico de Recebimentos</h4>
+        <p class="text-muted mb-0">Materiais recebidos por você na obra.</p>
+    </div>
+</div>
+<hr class="mb-4">
+
+{% if materiais_recebidos %}
+    <div class="row">
+        {% for recebimento in materiais_recebidos %}
+        <div class="col-md-6 mb-3">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">SC: {{ recebimento.solicitacao.numero }}</h6>
+                    <span class="status-badge badge-entregue">Recebido</span>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-6">
+                            <small class="text-muted">Obra:</small>
+                            <p class="mb-1">{{ recebimento.solicitacao.obra.nome|default:"-" }}</p>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted">Data Recebimento:</small>
+                            <p class="mb-1">{{ recebimento.data_recebimento|date:"d/m/Y H:i" }}</p>
+                        </div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-6">
+                            <small class="text-muted">Recebido por:</small>
+                            <p class="mb-1">{{ recebimento.recebedor.get_full_name|default:recebimento.recebedor.username }}</p>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted">Total de Itens na Entrega:</small>
+                            <p class="mb-1">{{ recebimento.itens_recebidos.count }} item{{ recebimento.itens_recebidos.count|pluralize:"s" }}</p>
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="d-flex gap-2">
+                        {% if recebimento.nota_fiscal %}<a href="{{ recebimento.nota_fiscal.url }}" class="btn btn-sm btn-outline-primary" target="_blank">Nota Fiscal</a>{% endif %}
+                        {% if recebimento.sc_assinada %}<a href="{{ recebimento.sc_assinada.url }}" class="btn btn-sm btn-outline-secondary" target="_blank">SC Assinada</a>{% endif %}
+                        {% if recebimento.boleto_comprovante %}<a href="{{ recebimento.boleto_comprovante.url }}" class="btn btn-sm btn-outline-info" target="_blank">Boleto</a>{% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+{% else %}
+    <div class="card">
+        <div class="card-body text-center p-5">
+            <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+            <h5>Nenhum recebimento encontrado</h5>
+            <p class="text-muted">Você ainda não recebeu nenhum material.</p>
+            <a href="{% url 'materiais:registrar_recebimento' %}" class="btn btn-warning mt-3">
+                <i class="fas fa-truck"></i> Ir para Recebimento de Material            </a>
+        </div>
+    </div>
+{% endif %}
+
+{% endblock %}

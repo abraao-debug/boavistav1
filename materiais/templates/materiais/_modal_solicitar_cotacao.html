@@ -1,0 +1,59 @@
+{% comment %} Modal para Solicitar Cotação a Fornecedores {% endcomment %}
+<div class="modal fade" id="solicitarCotacaoModal" tabindex="-1" aria-labelledby="solicitarCotacaoModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <form id="formSolicitarCotacao" method="POST">
+        {% csrf_token %}
+        <div class="modal-header">
+          <h5 class="modal-title" id="solicitarCotacaoModalLabel">Solicitar Cotação</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="row">
+            <div class="col-md-7">
+              <div class="mb-3">
+                <label for="fornecedorSelect" class="form-label">Buscar Fornecedores *</label>
+                <select id="fornecedorSelect" name="fornecedor" class="form-control" style="width: 100%;" required multiple="multiple"></select>
+                <div class="form-text" id="fornecedorCounter">0 fornecedor(es) selecionado(s)</div>
+              </div>
+              <div class="row">
+                <div class="col-md-6 mb-3">
+                  <label for="prazo_resposta" class="form-label">Prazo para Resposta</label>
+                  <input type="date" class="form-control" id="prazo_resposta" name="prazo_resposta">
+                </div>
+                <div class="col-md-6 mb-3">
+                  <label for="forma_pagamento" class="form-label">Forma de Pagamento *</label>
+                  <select class="form-select" name="forma_pagamento" id="forma_pagamento" required>
+                      <option value="a_negociar">A Negociar</option>
+                      <option value="avista">À Vista</option>
+                      <option value="pix">Pix</option>
+                      <option value="boleto">Boleto Bancário</option>
+                      <option value="cartao_credito">Cartão de Crédito</option>
+                  </select>
+                </div>
+              </div>
+               <div class="mb-3">
+                <label for="prazo_pagamento" class="form-label">Prazo de Pagamento (dias)</label>
+                <input type="number" class="form-control" name="prazo_pagamento" id="prazo_pagamento" value="0" min="0">
+              </div>
+              <div class="mb-3">
+                <label for="observacoes" class="form-label">Observações</label>
+                <textarea class="form-control" name="observacoes" id="observacoes" rows="2" placeholder="Informações adicionais para os fornecedores..."></textarea>
+              </div>
+            </div>
+            <div class="col-md-5">
+              <label class="form-label">Itens para Cotação *</label>
+              <div id="itensParaCotacaoList" class="border rounded p-2" style="max-height: 300px; overflow-y: auto;">
+                <p class="text-muted text-center">Carregando itens...</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Registrar e Gerar E-mails</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
