@@ -28,7 +28,7 @@ DEBUG = os.environ.get('DJANGO_DEBUG', '') != 'False' # <--- MODIFIQUE ESTA LINH
 SECRET_KEY = 'django-insecure-b)^^d3)vx0$o7^qazi1-0tzp7l3b429gelx*s%q^ls7+_mjn2@'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
 ALLOWED_HOSTS = ['abraaolm.pythonanywhere.com']
 
