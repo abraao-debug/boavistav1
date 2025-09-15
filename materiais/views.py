@@ -1785,17 +1785,25 @@ def editar_item(request, item_id):
     }
     return render(request, 'materiais/editar_item.html', context)
 
-@login_required
+login_required
 def visualizar_rm_pdf(request, rm_id):
     rm = get_object_or_404(
         RequisicaoMaterial.objects.select_related(
             'solicitacao_origem__solicitante',
             'solicitacao_origem__obra',
-            'solicitacao_origem__destino', # NOVO
+            'solicitacao_origem__destino',
             'cotacao_vencedora__fornecedor'
         ), 
         id=rm_id
     )
+
+    # ===================================================================
+    # INÍCIO DA LINHA ADICIONADA: Calcula o subtotal apenas dos itens
+    # ===================================================================
+    subtotal_itens = rm.valor_total - rm.cotacao_vencedora.valor_frete
+    # ===================================================================
+    # FIM DA LINHA ADICIONADA
+    # ===================================================================
 
     context = {
         'rm': rm,
@@ -1803,6 +1811,7 @@ def visualizar_rm_pdf(request, rm_id):
         'fornecedor': rm.cotacao_vencedora.fornecedor,
         'itens_cotados': rm.cotacao_vencedora.itens_cotados.select_related('item_solicitacao').all(),
         'empresa': rm_config.DADOS_EMPRESA,
+        'subtotal_itens': subtotal_itens, # <-- Adiciona o valor ao contexto
     }
     
     html_string = render_to_string('materiais/rm_pdf_template.html', context)
@@ -1904,26 +1913,32 @@ def registrar_recebimento(request):
                     boleto_comprovante=request.FILES.get('boleto_comprovante')
                 )
 
-                # 2. Cria os registros para cada item recebido
+                # 2. Cria os registros para cada item recebido no formulário atual
                 itens_selecionados_ids = request.POST.getlist('itens_selecionados')
                 for item_id in itens_selecionados_ids:
-                    quantidade = request.POST.get(f'quantidade_recebida_{item_id}')
-                    if quantidade and float(quantidade) > 0:
+                    quantidade_str = request.POST.get(f'quantidade_recebida_{item_id}')
+                    if quantidade_str and float(quantidade_str) > 0:
                         ItemRecebido.objects.create(
                             recebimento=novo_recebimento,
                             item_solicitado_id=item_id,
-                            quantidade_recebida=quantidade
+                            quantidade_recebida=float(quantidade_str),
+                            observacoes=request.POST.get(f'observacoes_{item_id}', '')
                         )
 
-                # 3. Atualiza o status da SC (Parcial ou Total)
-                total_itens = sc.itens.count()
-                itens_totalmente_recebidos = 0
-                for item in sc.itens.all():
-                    total_recebido_item = item.recebimentos.aggregate(total=Sum('quantidade_recebida'))['total'] or 0
-                    if total_recebido_item >= item.quantidade:
-                        itens_totalmente_recebidos += 1
+                # 3. VERIFICA O STATUS GERAL DA SC (LÓGICA CORRIGIDA)
+                total_itens_sc = sc.itens.count()
+                itens_completos = 0
+                for item_solicitado in sc.itens.all():
+                    # Soma tudo que já foi recebido para este item em todos os recebimentos
+                    total_recebido_do_item = item_solicitado.recebimentos.aggregate(
+                        total=Sum('quantidade_recebida')
+                    )['total'] or 0
+                    
+                    if total_recebido_do_item >= item_solicitado.quantidade:
+                        itens_completos += 1
                 
-                if itens_totalmente_recebidos == total_itens:
+                # Decide o novo status da SC
+                if itens_completos == total_itens_sc:
                     sc.status = 'recebida'
                     acao_historico = "Material Recebido (Total)"
                 else:
@@ -1935,7 +1950,7 @@ def registrar_recebimento(request):
                 # 4. Cria registro no histórico
                 HistoricoSolicitacao.objects.create(
                     solicitacao=sc, usuario=request.user, acao=acao_historico,
-                    detalhes=f"Recebimento registrado por {request.user.get_full_name()}."
+                    detalhes=f"Recebimento de {len(itens_selecionados_ids)} item(ns) registrado por {request.user.get_full_name()}."
                 )
                 
                 messages.success(request, f'Recebimento da SC {sc.numero} registrado com sucesso!')
@@ -1944,11 +1959,11 @@ def registrar_recebimento(request):
         except Exception as e:
             messages.error(request, f'Ocorreu um erro ao registrar o recebimento: {e}')
     
-    # Lógica para GET
+    # Lógica para GET (carregar a página)
     user_obras = request.user.obras.all()
     scs_a_receber = SolicitacaoCompra.objects.filter(
         obra__in=user_obras,
-        status__in=['a_caminho', 'recebida_parcial']
+        status__in=['a_caminho', 'recebida_parcial'] # Agora também busca as parciais
     ).order_by('data_criacao')
     
     context = {

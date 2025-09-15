@@ -187,6 +187,7 @@ class SolicitacaoCompra(models.Model):
         ('cotacao_selecionada', 'Cotação - Recebida/Analisar'),
         ('finalizada', 'RM Gerada'),
         ('a_caminho', 'A Caminho'),
+        ('recebida_parcial', 'Recebida Parcialmente'), # <--- ADICIONE ESTA LINHA
         ('recebida', 'Recebida'),
     ]
     numero = models.CharField(max_length=100, unique=True, blank=True, verbose_name="Código")
@@ -360,16 +361,30 @@ class ItemRequisicao(models.Model):
         verbose_name = "Item da Requisição"
         verbose_name_plural = "Itens da Requisição"
 
+def get_recebimento_upload_path(instance, filename):
+    """
+    Cria um caminho dinâmico para os uploads de recebimento:
+    media/recebimentos/ANO-MES-DIA/NUMERO_DA_RM/nome_original_do_arquivo.ext
+    """
+    data_hoje = timezone.now().strftime('%Y-%m-%d')
+    # Tenta pegar o número da RM. Se não existir, usa o número da SC como fallback.
+    try:
+        identificador = instance.solicitacao.requisicao.numero
+    except RequisicaoMaterial.DoesNotExist:
+        identificador = instance.solicitacao.numero
+        
+    return f'recebimentos/{data_hoje}/{identificador}/{filename}'
+
 class Recebimento(models.Model):
     solicitacao = models.ForeignKey(SolicitacaoCompra, on_delete=models.PROTECT, related_name='recebimentos', verbose_name="Solicitação de Compra")
     recebedor = models.ForeignKey(User, on_delete=models.PROTECT, verbose_name="Recebedor")
     data_recebimento = models.DateTimeField(default=timezone.now, verbose_name="Data de Recebimento")
     observacoes = models.TextField(blank=True, verbose_name="Observações Gerais")
     
-    # Campos para os documentos obrigatórios
-    nota_fiscal = models.FileField(upload_to='recebimentos/notas_fiscais/', verbose_name="Nota Fiscal")
-    sc_assinada = models.FileField(upload_to='recebimentos/scs_assinadas/', verbose_name="SC Assinada")
-    boleto_comprovante = models.FileField(upload_to='recebimentos/comprovantes/', verbose_name="Boleto/Comprovante")
+    # Campos para os documentos obrigatórios USANDO A NOVA FUNÇÃO
+    nota_fiscal = models.FileField(upload_to=get_recebimento_upload_path, verbose_name="Nota Fiscal")
+    sc_assinada = models.FileField(upload_to=get_recebimento_upload_path, verbose_name="SC Assinada")
+    boleto_comprovante = models.FileField(upload_to=get_recebimento_upload_path, verbose_name="Boleto/Comprovante")
 
     def __str__(self):
         return f"Recebimento da SC {self.solicitacao.numero} em {self.data_recebimento.strftime('%d/%m/%Y')}"
@@ -383,6 +398,7 @@ class ItemRecebido(models.Model):
     recebimento = models.ForeignKey(Recebimento, on_delete=models.CASCADE, related_name='itens_recebidos')
     item_solicitado = models.ForeignKey(ItemSolicitacao, on_delete=models.PROTECT, related_name='recebimentos')
     quantidade_recebida = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Quantidade Recebida")
+    observacoes = models.TextField(blank=True) # <--- ADICIONE ESTA LINHA
 
     def __str__(self):
         return f"{self.quantidade_recebida} x {self.item_solicitado.descricao}"

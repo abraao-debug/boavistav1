@@ -6,10 +6,15 @@
 <style>
     .select2-container .select2-selection--single { height: calc(1.5em + .75rem + 2px); }
     #itens-container .card-body { background-color: #f8f9fa; }
-    .upload-box { border: 2px dashed #dee2e6; border-radius: .375rem; padding: 2rem; text-align: center; cursor: pointer; }
+    .upload-box { border: 2px dashed #dee2e6; border-radius: .375rem; padding: 2rem; text-align: center; cursor: pointer; transition: background-color 0.2s ease-in-out; }
     .upload-box:hover { background-color: #f1f3f5; }
     .upload-box p { margin-bottom: 0; }
     .file-name { font-weight: bold; color: #0d6efd; }
+    
+    /* Regra de CSS para destacar caixas de upload com erro */
+    .upload-box.is-invalid {
+        border-color: #dc3545; /* Cor de erro do Bootstrap */
+    }
 </style>
 
 <div class="d-flex align-items-center mb-3">
@@ -63,7 +68,7 @@
                     <div class="col-md-4 mb-3">
                         <label class="form-label">Nota Fiscal *</label>
                         <div class="upload-box" onclick="this.querySelector('input').click()">
-                            <input type="file" name="nota_fiscal" class="d-none" required onchange="updateFileName(this)">
+                            <input type="file" name="nota_fiscal" class="d-none" required onchange="updateFileName(this)" accept="image/*" capture="environment">
                             <p><i class="fas fa-upload"></i> <span class="upload-text">Clique para anexar</span></p>
                             <p class="file-name"></p>
                         </div>
@@ -71,7 +76,7 @@
                     <div class="col-md-4 mb-3">
                         <label class="form-label">SC Assinada *</label>
                         <div class="upload-box" onclick="this.querySelector('input').click()">
-                            <input type="file" name="sc_assinada" class="d-none" required onchange="updateFileName(this)">
+                            <input type="file" name="sc_assinada" class="d-none" required onchange="updateFileName(this)" accept="image/*" capture="environment">
                              <p><i class="fas fa-upload"></i> <span class="upload-text">Clique para anexar</span></p>
                              <p class="file-name"></p>
                         </div>
@@ -79,7 +84,7 @@
                     <div class="col-md-4 mb-3">
                         <label class="form-label">Boleto/Comprovante *</label>
                          <div class="upload-box" onclick="this.querySelector('input').click()">
-                            <input type="file" name="boleto_comprovante" class="d-none" required onchange="updateFileName(this)">
+                            <input type="file" name="boleto_comprovante" class="d-none" required onchange="updateFileName(this)" accept="image/*" capture="environment">
                              <p><i class="fas fa-upload"></i> <span class="upload-text">Clique para anexar</span></p>
                              <p class="file-name"></p>
                         </div>
@@ -106,7 +111,9 @@
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+    // --- SELETORES DOS ELEMENTOS PRINCIPAIS ---
     const scSelect = $('#sc-select');
+    const form = document.getElementById('form-recebimento');
     const dynamicContent = document.getElementById('dynamic-content');
     const detalhesContent = document.getElementById('detalhes-sc-content');
     const itensList = document.getElementById('lista-itens-receber');
@@ -114,6 +121,7 @@ document.addEventListener('DOMContentLoaded', function () {
     
     scSelect.select2({ placeholder: "Selecione uma SC para recebimento" });
 
+    // --- CARREGA DADOS DA SC QUANDO SELECIONADA ---
     scSelect.on('change', function() {
         const solicitacaoId = this.value;
         if (!solicitacaoId) {
@@ -124,6 +132,7 @@ document.addEventListener('DOMContentLoaded', function () {
         detalhesContent.innerHTML = '<p class="text-center">Carregando detalhes...</p>';
         itensList.innerHTML = '<p class="text-center">Carregando itens...</p>';
         dynamicContent.classList.remove('d-none');
+        updateSubmitButtonState(); // Reseta o botão ao carregar nova SC
 
         fetch(`/api/itens-para-receber/${solicitacaoId}/`)
             .then(response => response.json())
@@ -143,20 +152,22 @@ document.addEventListener('DOMContentLoaded', function () {
                     if (data.itens.length > 0) {
                         data.itens.forEach(item => {
                             itemsHtml += `
-                            <div class="card mb-2">
+                            <div class="card mb-2 item-row">
                                 <div class="card-body">
                                     <div class="row align-items-center">
                                         <div class="col-1"><input class="form-check-input item-checkbox" type="checkbox" name="itens_selecionados" value="${item.id}"></div>
                                         <div class="col-4"><strong>${item.descricao}</strong></div>
                                         <div class="col-2"><small class="text-muted">Pendente: ${item.quantidade_pendente}</small></div>
-                                        <div class="col-2"><input type="number" name="quantidade_recebida_${item.id}" class="form-control form-control-sm" placeholder="Qtd." step="0.01" max="${item.quantidade_pendente}" min="0"></div>
+                                        <div class="col-2">
+                                            <input type="number" name="quantidade_recebida_${item.id}" class="form-control form-control-sm item-quantidade" placeholder="Qtd." step="0.01" max="${item.quantidade_pendente}" min="0" disabled>
+                                        </div>
                                         <div class="col-3"><input type="text" name="observacoes_${item.id}" class="form-control form-control-sm" placeholder="Obs. item"></div>
                                     </div>
                                 </div>
                             </div>`;
                         });
                     } else {
-                        itemsHtml = '<p class="text-center text-danger">Todos os itens desta SC já foram recebidos.</p>';
+                        itemsHtml = '<p class="text-center text-success"><strong><i class="fas fa-check-circle"></i> Todos os itens desta SC já foram recebidos.</strong></p>';
                     }
                     itensList.innerHTML = itemsHtml;
                 } else {
@@ -166,28 +177,92 @@ document.addEventListener('DOMContentLoaded', function () {
             });
     });
 
-    // Lógica para contagem e habilitação do botão
-    document.body.addEventListener('change', function(e) {
+    // --- LÓGICA DE VALIDAÇÃO E INTERATIVIDADE ---
+
+    function updateSubmitButtonState() {
+        const count = document.querySelectorAll('.item-checkbox:checked').length;
+        btnConfirmar.textContent = `Confirmar Recebimento (${count} item${count !== 1 ? 's' : ''})`;
+        btnConfirmar.disabled = count === 0;
+    }
+
+    itensList.addEventListener('change', function(e) {
         if (e.target.classList.contains('item-checkbox')) {
-            const count = document.querySelectorAll('.item-checkbox:checked').length;
-            btnConfirmar.textContent = `Confirmar Recebimento (${count} item${count !== 1 ? 's' : ''})`;
-            btnConfirmar.disabled = count === 0;
+            const itemRow = e.target.closest('.item-row');
+            const quantidadeInput = itemRow.querySelector('.item-quantidade');
+
+            if (e.target.checked) {
+                quantidadeInput.disabled = false;
+                quantidadeInput.required = true;
+            } else {
+                quantidadeInput.disabled = true;
+                quantidadeInput.required = false;
+                quantidadeInput.value = '';
+                quantidadeInput.classList.remove('is-invalid');
+            }
+            updateSubmitButtonState();
+        }
+    });
+
+    form.addEventListener('submit', function(event) {
+        event.preventDefault();
+        
+        let errors = [];
+        document.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
+
+        const itensChecados = document.querySelectorAll('.item-checkbox:checked');
+        if (itensChecados.length === 0) {
+            errors.push('Selecione pelo menos um item para registrar o recebimento.');
+        } else {
+            itensChecados.forEach(checkbox => {
+                const itemRow = checkbox.closest('.item-row');
+                const quantidadeInput = itemRow.querySelector('.item-quantidade');
+                const descricao = itemRow.querySelector('strong').textContent;
+                
+                if (!quantidadeInput.value || parseFloat(quantidadeInput.value) <= 0) {
+                    errors.push(`- Informe uma quantidade válida para o item: "${descricao}".`);
+                    quantidadeInput.classList.add('is-invalid');
+                }
+            });
+        }
+
+        const fileInputs = form.querySelectorAll('input[type="file"][required]');
+        fileInputs.forEach(input => {
+            if (input.files.length === 0) {
+                const label = input.closest('.col-md-4').querySelector('label').textContent;
+                errors.push(`- O anexo "${label}" é obrigatório.`);
+                input.closest('.upload-box').classList.add('is-invalid');
+            }
+        });
+
+        if (errors.length > 0) {
+            alert('Por favor, corrija os seguintes erros:\n\n' + errors.join('\n'));
+        } else {
+            form.submit();
         }
     });
     
     document.getElementById('btn-selecionar-todos').addEventListener('click', () => {
-        document.querySelectorAll('.item-checkbox').forEach(cb => cb.checked = true);
-        document.querySelector('.item-checkbox').dispatchEvent(new Event('change'));
+        document.querySelectorAll('.item-checkbox').forEach(cb => {
+            if (!cb.checked) {
+                cb.checked = true;
+                cb.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        });
     });
 
     document.getElementById('btn-desmarcar-todos').addEventListener('click', () => {
-        document.querySelectorAll('.item-checkbox').forEach(cb => cb.checked = false);
-        document.querySelector('.item-checkbox').dispatchEvent(new Event('change'));
+        document.querySelectorAll('.item-checkbox').forEach(cb => {
+            if (cb.checked) {
+                cb.checked = false;
+                cb.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        });
     });
 });
 
 function updateFileName(input) {
     const uploadBox = input.parentElement;
+    uploadBox.classList.remove('is-invalid');
     const fileNameSpan = uploadBox.querySelector('.file-name');
     const uploadTextSpan = uploadBox.querySelector('.upload-text');
     if (input.files.length > 0) {

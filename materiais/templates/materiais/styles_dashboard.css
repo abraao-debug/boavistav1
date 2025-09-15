@@ -133,3 +133,8 @@ a.status-card-link:hover {
     padding: 1rem;
     color: #842029;
 }
+
+/* Adicione estas linhas dentro da tag <style> */
+.upload-box.is-invalid {
+    border-color: #dc3545; /* Cor de erro do Bootstrap */
+}

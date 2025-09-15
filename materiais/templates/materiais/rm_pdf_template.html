@@ -24,15 +24,14 @@
         .rodape { margin-top: 50px; }
         .rodape-assinaturas { display: flex; justify-content: space-between; margin-top: 40px; text-align: center; }
         
-        /* --- CSS AJUSTADO PARA ALINHAMENTO --- */
         .assinatura {
             width: 30%;
-            display: flex; /* Transforma a coluna da assinatura em um container flex */
-            flex-direction: column; /* Organiza os itens de cima para baixo */
+            display: flex;
+            flex-direction: column;
         }
         .assinatura-conteudo {
-            flex-grow: 1; /* Faz esta área crescer para ocupar o espaço vago */
-            min-height: 50px; /* Garante uma altura mínima para os blocos vazios */
+            flex-grow: 1;
+            min-height: 50px;
         }
         .assinatura img {
             display: block;
@@ -49,13 +48,11 @@
             padding-top: 0;
         }
         .assinatura .linha-cargo {
-            margin-top: auto; /* Empurra a linha para o final do espaço disponível */
+            margin-top: auto;
             border-top: 1px solid #000;
             padding-top: 5px;
             font-size: 9pt;
         }
-        /* --- FIM DO CSS AJUSTADO --- */
-
     </style>
 </head>
 <body>
@@ -121,8 +118,19 @@
             </tr>
             {% endwith %}
             {% endfor %}
+            
             <tr class="total-row">
-                <td colspan="5" style="text-align: right;">TOTAL</td>
+                <td colspan="5" style="text-align: right;">SUBTOTAL DOS ITENS</td>
+                <td class="numero">R$ {{ subtotal_itens|floatformat:"2" }}</td>
+            </tr>
+
+            <tr class="total-row">
+                <td colspan="5" style="text-align: right;">FRETE</td>
+                <td class="numero">R$ {{ rm.cotacao_vencedora.valor_frete|floatformat:"2" }}</td>
+            </tr>
+            
+            <tr class="total-row" style="background-color: #f2f2f2;">
+                <td colspan="5" style="text-align: right;">TOTAL GERAL</td>
                 <td class="numero">R$ {{ rm.valor_total|floatformat:"2" }}</td>
             </tr>
         </tbody>
