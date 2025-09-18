@@ -136,7 +136,7 @@
             
             <div class="actions-footer w-100">
                 <button class="btn btn-danger-soft" onclick="abrirModalRejeicao('{{ sc.id }}', '{{ sc.numero }}')"><i class="fas fa-times"></i> Rejeitar</button>
-                <button class="btn btn-warning" onclick="abrirModalAprovacaoParcial('{{ sc.id }}')"><i class="fas fa-adjust"></i> Aprovar Parcialmente</button>
+                <a href="{% url 'materiais:analisar_editar_solicitacao' sc.id %}" class="btn btn-warning"><i class="fas fa-edit"></i> Editar e Aprovar</a>
                 <button class="btn btn-success-soft" onclick="abrirModalAprovacao('{{ sc.id }}', '{{ sc.numero }}')"><i class="fas fa-check"></i> Aprovar Total</button>
             </div>
         </div>

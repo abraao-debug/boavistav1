@@ -3,333 +3,256 @@
 {% block title %}Dashboard - Relatórios{% endblock %}
 
 {% block content %}
-<div class="row">
-    <div class="col-12">
-        <h2><i class="fas fa-chart-bar"></i> Dashboard - Relatórios</h2>
-        <p class="text-muted">Visualização de estatísticas e relatórios do sistema</p>
-        <hr>
+<style>
+    {% include 'materiais/styles_dashboard.css' %} /* Inclui seus estilos base */
+
+    .obra-section {
+        border: 1px solid #e0e0e0;
+        border-radius: 0.75rem;
+        margin-bottom: 2.5rem;
+        background-color: #fff;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        overflow: hidden;
+    }
+    .obra-header {
+        background-color: #f8f9fa;
+        padding: 1rem 1.5rem;
+        border-bottom: 1px solid #e0e0e0;
+    }
+    .obra-header h4 {
+        margin-bottom: 0;
+        font-weight: 600;
+    }
+    .obra-body {
+        padding: 1.5rem;
+    }
+    .chart-container {
+        position: relative;
+        height: 300px;
+        width: 100%;
+    }
+
+
+.report-card {
+    border: none;
+    color: white;
+    border-radius: 0.5rem;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.report-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+}
+.report-card .card-body {
+    padding: 1.25rem;
+}
+.report-card h4 {
+    font-size: 2.2rem; /* Levemente menor para um visual mais limpo */
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+}
+.report-card p {
+    font-size: 0.9rem;
+    opacity: 0.9;
+}
+
+/* Cores Suavizadas e Correção de Texto */
+.report-card.bg-primary { background-color: #4a90e2 !important; } /* Azul mais suave */
+.report-card.bg-warning { background-color: #f5a623 !important; color: #ffffff !important; } /* Laranja com texto branco */
+.report-card.bg-success { background-color: #28a745 !important; } /* Verde mantido */
+.report-card.bg-info   { background-color: #4ab3c2 !important; } /* Ciano/Teal suave */
+.report-card.bg-dark    { background-color: #4a4a4a !important; } /* Cinza escuro suave */
+.report-card.bg-danger  { background-color: #d9534f !important; } /* Vermelho suave */
+</style>
+
+<div class="d-flex align-items-center mb-3">
+    <a href="{% url 'materiais:dashboard' %}" class="btn btn-secondary me-3">
+        <i class="fas fa-arrow-left"></i> Voltar
+    </a>
+    <div>
+        <h4 class="mb-0"><i class="fas fa-chart-bar"></i> Relatórios de Solicitações</h4>
+        <p class="text-muted mb-0">Visão geral e detalhada do status e consumo das Solicitações de Compra.</p>
     </div>
 </div>
+<hr class="mb-4">
 
-<!-- Cards de Estatísticas Gerais -->
-<div class="row mb-4">
-    <div class="col-md-3">
-        <div class="card bg-primary text-white">
-            <div class="card-body">
-                <div class="d-flex justify-content-between">
-                    <div>
-                        <h4>{{ total_solicitacoes }}</h4>
-                        <p class="mb-0">Total de SCs</p>
-                    </div>
-                    <div class="align-self-center">
-                        <i class="fas fa-file-alt fa-2x"></i>
+<div class="card mb-5">
+    <div class="card-header">
+        <h5><i class="fas fa-globe-americas"></i> Visão Geral (Todas as Obras)</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md col-6 mb-3">
+                <div class="card report-card bg-primary h-100">
+                    <div class="card-body text-center">
+                        <h4>{{ geral.total_solicitacoes }}</h4>
+                        <p class="mb-0">Total SCs</p>
                     </div>
                 </div>
             </div>
-        </div>
-    </div>
-    
-    <div class="col-md-3">
-        <div class="card bg-warning text-white">
-            <div class="card-body">
-                <div class="d-flex justify-content-between">
-                    <div>
-                        <h4>{{ solicitacoes_pendentes }}</h4>
+            <div class="col-md col-6 mb-3">
+                <div class="card report-card bg-warning h-100">
+                    <div class="card-body text-center">
+                        <h4>{{ geral.solicitacoes_pendentes }}</h4>
                         <p class="mb-0">Pendentes</p>
                     </div>
-                    <div class="align-self-center">
-                        <i class="fas fa-clock fa-2x"></i>
-                    </div>
                 </div>
             </div>
-        </div>
-    </div>
-    
-    <div class="col-md-3">
-        <div class="card bg-success text-white">
-            <div class="card-body">
-                <div class="d-flex justify-content-between">
-                    <div>
-                        <h4>{{ solicitacoes_aprovadas }}</h4>
+            <div class="col-md col-6 mb-3">
+                <div class="card report-card bg-success h-100">
+                    <div class="card-body text-center">
+                        <h4>{{ geral.solicitacoes_aprovadas }}</h4>
                         <p class="mb-0">Aprovadas</p>
                     </div>
-                    <div class="align-self-center">
-                        <i class="fas fa-check fa-2x"></i>
-                    </div>
                 </div>
             </div>
-        </div>
-    </div>
-    
-    <div class="col-md-3">
-        <div class="card bg-info text-white">
-            <div class="card-body">
-                <div class="d-flex justify-content-between">
-                    <div>
-                        <h4>{{ solicitacoes_finalizadas }}</h4>
-                        <p class="mb-0">Finalizadas</p>
-                    </div>
-                    <div class="align-self-center">
-                        <i class="fas fa-flag-checkered fa-2x"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Segunda linha de cards -->
-<div class="row mb-4">
-    <div class="col-md-3">
-        <div class="card bg-secondary text-white">
-            <div class="card-body">
-                <div class="d-flex justify-content-between">
-                    <div>
-                        <h4>{{ solicitacoes_em_cotacao }}</h4>
+            <div class="col-md col-6 mb-3">
+                <div class="card report-card bg-info h-100">
+                    <div class="card-body text-center">
+                        <h4>{{ geral.solicitacoes_em_cotacao }}</h4>
                         <p class="mb-0">Em Cotação</p>
                     </div>
-                    <div class="align-self-center">
-                        <i class="fas fa-dollar-sign fa-2x"></i>
-                    </div>
                 </div>
             </div>
-        </div>
-    </div>
-    
-    <div class="col-md-3">
-        <div class="card bg-dark text-white">
-            <div class="card-body">
-                <div class="d-flex justify-content-between">
-                    <div>
-                        <h4>{{ solicitacoes_recebidas }}</h4>
+            <div class="col-md col-6 mb-3">
+                <div class="card report-card bg-dark h-100">
+                    <div class="card-body text-center">
+                        <h4>{{ geral.solicitacoes_recebidas }}</h4>
                         <p class="mb-0">Recebidas</p>
                     </div>
-                    <div class="align-self-center">
-                        <i class="fas fa-box fa-2x"></i>
-                    </div>
                 </div>
             </div>
-        </div>
-    </div>
-    
-    <div class="col-md-3">
-        <div class="card bg-danger text-white">
-            <div class="card-body">
-                <div class="d-flex justify-content-between">
-                    <div>
-                        <h4>{{ solicitacoes_rejeitadas }}</h4>
+            <div class="col-md col-6 mb-3">
+                <div class="card report-card bg-danger h-100">
+                    <div class="card-body text-center">
+                        <h4>{{ geral.solicitacoes_rejeitadas }}</h4>
                         <p class="mb-0">Rejeitadas</p>
                     </div>
-                    <div class="align-self-center">
-                        <i class="fas fa-times fa-2x"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-md-3">
-        <div class="card bg-light text-dark border">
-            <div class="card-body">
-                <div class="d-flex justify-content-between">
-                    <div>
-                        <h4>{{ obras_stats|length }}</h4>
-                        <p class="mb-0">Obras Ativas</p>
-                    </div>
-                    <div class="align-self-center">
-                        <i class="fas fa-building fa-2x"></i>
-                    </div>
                 </div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Relatórios por Obra -->
-<div class="row mb-4">
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-header">
-                <h5><i class="fas fa-building"></i> Estatísticas por Obra</h5>
+
+<h3 class="mt-5 mb-3">Análise por Obra</h3>
+
+{% for stats in obras_stats_detalhado %}
+<div class="obra-section">
+    <div class="obra-header">
+        <h4><i class="fas fa-building text-primary"></i> {{ stats.obra.nome }}</h4>
+    </div>
+    <div class="obra-body">
+        <div class="row mb-4">
+            <div class="col-6 col-md-4 col-lg-2 mb-3"><a href="#" class="status-card-link"><div class="status-card status-aberto h-100"><span class="count">{{ stats.pendentes }}</span><p class="title"><i class="fas fa-file-invoice status-icon"></i> Pendentes</p></div></a></div>
+            <div class="col-6 col-md-4 col-lg-2 mb-3"><a href="#" class="status-card-link"><div class="status-card status-aprovado h-100"><span class="count">{{ stats.aprovadas }}</span><p class="title"><i class="fas fa-check status-icon"></i> Aprovadas</p></div></a></div>
+            <div class="col-6 col-md-4 col-lg-2 mb-3"><a href="#" class="status-card-link"><div class="status-card status-cotacao h-100"><span class="count">{{ stats.em_cotacao }}</span><p class="title"><i class="fas fa-calculator status-icon"></i> Em Cotação</p></div></a></div>
+            <div class="col-6 col-md-4 col-lg-2 mb-3"><a href="#" class="status-card-link"><div class="status-card status-requisicoes h-100"><span class="count">{{ stats.finalizadas }}</span><p class="title"><i class="fas fa-clipboard-list status-icon"></i> Finalizadas</p></div></a></div>
+            <div class="col-6 col-md-4 col-lg-2 mb-3"><a href="#" class="status-card-link"><div class="status-card status-caminho h-100"><span class="count">{{ stats.a_caminho }}</span><p class="title"><i class="fas fa-truck status-icon"></i> A Caminho</p></div></a></div>
+            <div class="col-6 col-md-4 col-lg-2 mb-3"><a href="#" class="status-card-link"><div class="status-card status-entregue h-100"><span class="count">{{ stats.recebidas }}</span><p class="title"><i class="fas fa-check-circle status-icon"></i> Recebidas</p></div></a></div>
+        </div>
+        
+        <div class="row">
+            <div class="col-lg-6 mb-4">
+                <div class="card h-100">
+                    <div class="card-header"><h6><i class="fas fa-dollar-sign"></i> Consumo por Categoria (Valor Total)</h6></div>
+                    <div class="card-body"><div class="chart-container"><canvas id="valorChart-{{ stats.obra.id }}"></canvas></div></div>
+                </div>
             </div>
-            <div class="card-body">
-                {% if obras_stats %}
-                    <div class="table-responsive">
-                        <table class="table table-sm">
-                            <thead>
-                                <tr>
-                                    <th>Obra</th>
-                                    <th class="text-center">Total SCs</th>
-                                    <th class="text-center">Aprovadas</th>
-                                    <th class="text-center">Finalizadas</th>
-                                </tr>
-                            </thead>
+            <div class="col-lg-6 mb-4">
+                <div class="card h-100">
+                    <div class="card-header"><h6><i class="fas fa-tags"></i> Itens Mais Solicitados (Top 5)</h6></div>
+                    <div class="card-body table-responsive">
+                        <table class="table table-sm table-hover">
+                            <thead><tr><th>Item</th><th class="text-end">Quantidade</th><th>Un.</th></tr></thead>
                             <tbody>
-                                {% for obra in obras_stats|slice:":10" %}
-                                <tr>
-                                    <td>{{ obra.nome }}</td>
-                                    <td class="text-center">
-                                        <span class="badge bg-primary">{{ obra.total_scs }}</span>
-                                    </td>
-                                    <td class="text-center">
-                                        <span class="badge bg-success">{{ obra.scs_aprovadas }}</span>
-                                    </td>
-                                    <td class="text-center">
-                                        <span class="badge bg-info">{{ obra.scs_finalizadas }}</span>
-                                    </td>
-                                </tr>
+                                {% for item in stats.itens_mais_solicitados %}
+                                <tr><td>{{ item.descricao }}</td><td class="text-end">{{ item.total_quantidade|floatformat:"-2" }}</td><td>{{ item.unidade }}</td></tr>
+                                {% empty %}
+                                <tr><td colspan="3" class="text-center text-muted">Nenhum item solicitado para esta obra.</td></tr>
                                 {% endfor %}
                             </tbody>
                         </table>
                     </div>
-                {% else %}
-                    <p class="text-muted">Nenhuma obra com solicitações encontrada.</p>
-                {% endif %}
+                </div>
             </div>
         </div>
-    </div>
-    
-    <!-- Relatórios por Usuário -->
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-header">
-                <h5><i class="fas fa-users"></i> Estatísticas por Usuário</h5>
+        <div class="row">
+            <div class="col-lg-6 mb-4">
+                 <div class="card h-100">
+                    <div class="card-header"><h6><i class="fas fa-pie-chart"></i> Distribuição por Status (SCs)</h6></div>
+                    <div class="card-body"><div class="chart-container"><canvas id="statusChart-{{ stats.obra.id }}"></canvas></div></div>
+                </div>
             </div>
-            <div class="card-body">
-                {% if usuarios_stats %}
-                    <div class="table-responsive">
-                        <table class="table table-sm">
-                            <thead>
-                                <tr>
-                                    <th>Usuário</th>
-                                    <th class="text-center">Total SCs</th>
-                                    <th class="text-center">Aprovadas</th>
-                                    <th class="text-center">Taxa</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for usuario in usuarios_stats|slice:":10" %}
-                                <tr>
-                                    <td>
-                                        {{ usuario.get_full_name|default:usuario.username }}
-                                        <small class="text-muted d-block">{{ usuario.get_perfil_display }}</small>
-                                    </td>
-                                    <td class="text-center">
-                                        <span class="badge bg-primary">{{ usuario.total_solicitacoes }}</span>
-                                    </td>
-                                    <td class="text-center">
-                                        <span class="badge bg-success">{{ usuario.aprovadas }}</span>
-                                    </td>
-                                    <td class="text-center">
-                                        {% if usuario.total_solicitacoes > 0 %}
-                                            {% widthratio usuario.aprovadas usuario.total_solicitacoes 100 %}%
-                                        {% else %}
-                                            0%
-                                        {% endif %}
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                {% else %}
-                    <p class="text-muted">Nenhum usuário com solicitações encontrado.</p>
-                {% endif %}
+             <div class="col-lg-6 mb-4">
+                 <div class="card h-100">
+                    <div class="card-header"><h6><i class="fas fa-cubes"></i> Consumo por Categoria (Quantidade)</h6></div>
+                    <div class="card-body"><div class="chart-container"><canvas id="qtdChart-{{ stats.obra.id }}"></canvas></div></div>
+                </div>
             </div>
         </div>
     </div>
 </div>
+{% empty %}
+    <div class="alert alert-info text-center">Nenhuma obra com solicitações de compra foi encontrada.</div>
+{% endfor %}
 
-<!-- Gráfico de Status (usando Chart.js) -->
-<div class="row">
-    <div class="col-md-8">
-        <div class="card">
-            <div class="card-header">
-                <h5><i class="fas fa-chart-pie"></i> Distribuição por Status</h5>
-            </div>
-            <div class="card-body">
-                <canvas id="statusChart" width="400" height="200"></canvas>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-md-4">
-        <div class="card">
-            <div class="card-header">
-                <h5><i class="fas fa-info-circle"></i> Resumo</h5>
-            </div>
-            <div class="card-body">
-                <ul class="list-unstyled">
-                    <li class="mb-2">
-                        <i class="fas fa-circle text-warning"></i>
-                        <strong>Pendentes:</strong> {{ solicitacoes_pendentes }} SCs
-                    </li>
-                    <li class="mb-2">
-                        <i class="fas fa-circle text-success"></i>
-                        <strong>Aprovadas:</strong> {{ solicitacoes_aprovadas }} SCs
-                    </li>
-                    <li class="mb-2">
-                        <i class="fas fa-circle text-info"></i>
-                        <strong>Em Cotação:</strong> {{ solicitacoes_em_cotacao }} SCs
-                    </li>
-                    <li class="mb-2">
-                        <i class="fas fa-circle text-secondary"></i>
-                        <strong>Finalizadas:</strong> {{ solicitacoes_finalizadas }} SCs
-                    </li>
-                    <li class="mb-2">
-                        <i class="fas fa-circle text-dark"></i>
-                        <strong>Recebidas:</strong> {{ solicitacoes_recebidas }} SCs
-                    </li>
-                    <li>
-                        <i class="fas fa-circle text-danger"></i>
-                        <strong>Rejeitadas:</strong> {{ solicitacoes_rejeitadas }} SCs
-                    </li>
-                </ul>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Script para o gráfico -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const ctx = document.getElementById('statusChart').getContext('2d');
-    const statusChart = new Chart(ctx, {
+    const chartColors = {
+        pendentes: '#ffc107', aprovadas: '#198754', cotacao: '#0dcaf0',
+        finalizadas: '#6c757d', caminho: '#0d6efd', recebidas: '#212529', rejeitadas: '#dc3545'
+    };
+
+    {% for stats in obras_stats_detalhado %}
+    // Gráfico de Status (Rosca)
+    const ctx_status_{{ stats.obra.id }} = document.getElementById('statusChart-{{ stats.obra.id }}').getContext('2d');
+    new Chart(ctx_status_{{ stats.obra.id }}, {
         type: 'doughnut',
         data: {
-            labels: ['Pendentes', 'Aprovadas', 'Em Cotação', 'Finalizadas', 'Recebidas', 'Rejeitadas'],
+            labels: ['Pendentes', 'Aprovadas', 'Em Cotação', 'Finalizadas', 'A Caminho', 'Recebidas', 'Rejeitadas'],
             datasets: [{
-                data: [
-                    {{ solicitacoes_pendentes }},
-                    {{ solicitacoes_aprovadas }},
-                    {{ solicitacoes_em_cotacao }},
-                    {{ solicitacoes_finalizadas }},
-                    {{ solicitacoes_recebidas }},
-                    {{ solicitacoes_rejeitadas }}
-                ],
-                backgroundColor: [
-                    '#ffc107', // warning - pendentes
-                    '#28a745', // success - aprovadas
-                    '#17a2b8', // info - em cotação
-                    '#6c757d', // secondary - finalizadas
-                    '#343a40', // dark - recebidas
-                    '#dc3545'  // danger - rejeitadas
-                ],
-                borderWidth: 2,
-                borderColor: '#fff'
+                data: [{{ stats.pendentes }}, {{ stats.aprovadas }}, {{ stats.em_cotacao }}, {{ stats.finalizadas }}, {{ stats.a_caminho }}, {{ stats.recebidas }}, {{ stats.rejeitadas }}],
+                backgroundColor: [chartColors.pendentes, chartColors.aprovadas, chartColors.cotacao, chartColors.finalizadas, chartColors.caminho, chartColors.recebidas, chartColors.rejeitadas],
+                borderColor: '#fff', borderWidth: 2
             }]
         },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    position: 'bottom'
-                }
-            }
-        }
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
     });
+
+    // Gráfico de Consumo por Valor (Barras Horizontais)
+    const consumoValorData_{{ stats.obra.id }} = JSON.parse('{{ stats.consumo_valor_json|escapejs }}');
+    const ctx_valor_{{ stats.obra.id }} = document.getElementById('valorChart-{{ stats.obra.id }}').getContext('2d');
+    new Chart(ctx_valor_{{ stats.obra.id }}, {
+        type: 'bar',
+        data: {
+            labels: consumoValorData_{{ stats.obra.id }}.labels,
+            datasets: [{
+                label: 'Valor Total (R$)',
+                data: consumoValorData_{{ stats.obra.id }}.data,
+                backgroundColor: '#28a745'
+            }]
+        },
+        options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+    });
+
+    // Gráfico de Consumo por Quantidade (Rosca)
+    const consumoQtdData_{{ stats.obra.id }} = JSON.parse('{{ stats.consumo_qtd_json|escapejs }}');
+    const ctx_qtd_{{ stats.obra.id }} = document.getElementById('qtdChart-{{ stats.obra.id }}').getContext('2d');
+    new Chart(ctx_qtd_{{ stats.obra.id }}, {
+        type: 'doughnut',
+        data: {
+            labels: consumoQtdData_{{ stats.obra.id }}.labels,
+            datasets: [{
+                data: consumoQtdData_{{ stats.obra.id }}.data,
+                backgroundColor: ['#0d6efd', '#6c757d', '#198754', '#ffc107', '#dc3545', '#0dcaf0', '#adb5bd'],
+                borderColor: '#fff', borderWidth: 2
+            }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+    });
+    {% endfor %}
 });
 </script>
 {% endblock %}

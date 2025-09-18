@@ -5,6 +5,7 @@ from django.contrib import messages
 from django.http import JsonResponse
 from django.utils import timezone
 from django.db.models import Count, Q, Sum, F, DecimalField
+from django.db.models.functions import Coalesce
 from django.views.decorators.csrf import csrf_exempt
 from difflib import SequenceMatcher
 from .forms import SolicitacaoCompraForm
@@ -988,75 +989,89 @@ def aprovar_parcial(request, solicitacao_id):
 
 @login_required
 def dashboard_relatorios(request):
-    # PERMISSÃO CORRIGIDA PARA INCLUIR O DIRETOR
     if request.user.perfil not in ['engenheiro', 'almoxarife_escritorio', 'diretor']:
         messages.error(request, 'Acesso negado.')
         return redirect('materiais:dashboard')
-    
-    total_solicitacoes = SolicitacaoCompra.objects.count()
-    solicitacoes_pendentes = SolicitacaoCompra.objects.filter(status='pendente_aprovacao').count()
-    solicitacoes_aprovadas = SolicitacaoCompra.objects.filter(status='aprovada').count()
-    solicitacoes_em_cotacao = SolicitacaoCompra.objects.filter(status='em_cotacao').count()
-    solicitacoes_finalizadas = SolicitacaoCompra.objects.filter(status='finalizada').count()
-    solicitacoes_recebidas = SolicitacaoCompra.objects.filter(status='recebida').count()
-    solicitacoes_rejeitadas = SolicitacaoCompra.objects.filter(status='rejeitada').count()
-    
-    obras_stats = Obra.objects.annotate(
-        total_scs=Count('solicitacaocompra'),
-        scs_aprovadas=Count('solicitacaocompra', filter=Q(solicitacaocompra__status='aprovada')),
-        scs_finalizadas=Count('solicitacaocompra', filter=Q(solicitacaocompra__status='finalizada'))
-    ).filter(ativa=True).order_by('-total_scs')
-    
-    usuarios_stats = User.objects.annotate(
-        total_solicitacoes=Count('solicitacoes'),
-        aprovadas=Count('solicitacoes', filter=Q(solicitacoes__status='aprovada'))
-    ).filter(total_solicitacoes__gt=0).order_by('-total_solicitacoes')
-    
-    from datetime import datetime, timedelta
-    from django.db.models.functions import TruncMonth
 
-    seis_meses_atras = timezone.now() - timedelta(days=180)
-    solicitacoes_por_mes = SolicitacaoCompra.objects.filter(
-        data_criacao__gte=seis_meses_atras
-    ).annotate(
-        mes=TruncMonth('data_criacao')
-    ).values('mes').annotate(
-        total=Count('id')
-    ).order_by('mes')
-    
-    valor_total_cotacoes = sum(c.valor_total for c in Cotacao.objects.filter(vencedora=True))
-    
-    # --- INÍCIO DA CORREÇÃO ---
-    # A consulta foi reescrita para calcular a soma diretamente no banco de dados.
-    cotacoes_por_fornecedor = Cotacao.objects.filter(vencedora=True).values(
-        'fornecedor__nome_fantasia'
-    ).annotate(
-        total_cotacoes=Count('id'),
-        soma_fretes=Sum('valor_frete'),
-        soma_itens=Sum(
-            F('itens_cotados__preco') * F('itens_cotados__item_solicitacao__quantidade'),
-            output_field=DecimalField()
-        )
-    ).annotate(
-        valor_total=F('soma_fretes') + F('soma_itens')
-    ).order_by('-valor_total').values(
-        'fornecedor__nome_fantasia', 'total_cotacoes', 'valor_total'
-    )[:5]
-    # --- FIM DA CORREÇÃO ---
-    
+    # --- 1. Cálculos Gerais (Visão Geral) ---
+    all_scs = SolicitacaoCompra.objects.all()
+    aprovado_statuses = ['aprovada', 'aprovado_engenharia']
+    cotacao_statuses = ['em_cotacao', 'aguardando_resposta', 'cotacao_selecionada']
+
+    contexto_geral = {
+        'total_solicitacoes': all_scs.count(),
+        'solicitacoes_pendentes': all_scs.filter(status='pendente_aprovacao').count(),
+        'solicitacoes_aprovadas': all_scs.filter(status__in=aprovado_statuses).count(),
+        'solicitacoes_em_cotacao': all_scs.filter(status__in=cotacao_statuses).count(),
+        'solicitacoes_finalizadas': all_scs.filter(status='finalizada').count(),
+        'solicitacoes_recebidas': all_scs.filter(status='recebida').count(),
+        'solicitacoes_rejeitadas': all_scs.filter(status='rejeitada').count(),
+        'obras_ativas': Obra.objects.filter(ativa=True).count(),
+    }
+
+    # --- 2. Detalhes e Novas Métricas por Obra ---
+    obras_com_scs = Obra.objects.filter(ativa=True, solicitacaocompra__isnull=False).distinct()
+    obras_stats_detalhado = []
+
+    for obra in obras_com_scs:
+        obra_scs = SolicitacaoCompra.objects.filter(obra=obra)
+        
+        stats = {
+            'obra': obra,
+            'pendentes': obra_scs.filter(status='pendente_aprovacao').count(),
+            'aprovadas': obra_scs.filter(status__in=aprovado_statuses).count(),
+            'em_cotacao': obra_scs.filter(status__in=cotacao_statuses).count(),
+            'finalizadas': obra_scs.filter(status='finalizada').count(),
+            'a_caminho': obra_scs.filter(status='a_caminho').count(),
+            'recebidas': obra_scs.filter(status__in=['recebida', 'recebida_parcial']).count(),
+            'rejeitadas': obra_scs.filter(status='rejeitada').count(),
+        }
+
+        # MÉTRICA: Itens Mais Solicitados (Top 5 por Quantidade)
+        stats['itens_mais_solicitados'] = ItemSolicitacao.objects.filter(
+            solicitacao__obra=obra
+        ).values('descricao', 'unidade').annotate(
+            total_quantidade=Sum('quantidade')
+        ).order_by('-total_quantidade')[:5]
+
+        # MÉTRICA: Consumo por Categoria (Valor Total em R$)
+        # ---- INÍCIO DA CORREÇÃO ----
+        consumo_valor_categoria = ItemCotacao.objects.filter(
+            cotacao__solicitacao__obra=obra, cotacao__vencedora=True
+        ).annotate(
+            subtotal=F('preco') * F('item_solicitacao__quantidade')
+        ).values(
+            categoria_nome=F('item_solicitacao__item_catalogo__categoria__categoria_mae__nome')
+        ).annotate(
+            valor_total=Sum('subtotal')
+        ).order_by('-valor_total')
+        
+        # MÉTRICA: Consumo por Categoria (Quantidade Total de Itens)
+        consumo_qtd_categoria = ItemSolicitacao.objects.filter(
+            solicitacao__obra=obra, item_catalogo__isnull=False
+        ).values(
+            categoria_nome=F('item_catalogo__categoria__categoria_mae__nome')
+        ).annotate(
+            qtd_total=Sum('quantidade')
+        ).order_by('-qtd_total')
+
+        # Prepara os dados para os gráficos em formato JSON
+        stats['consumo_valor_json'] = json.dumps({
+            'labels': [c['categoria_nome'] or 'Sem Categoria Principal' for c in consumo_valor_categoria],
+            'data': [float(c['valor_total']) for c in consumo_valor_categoria]
+        })
+        
+        stats['consumo_qtd_json'] = json.dumps({
+            'labels': [c['categoria_nome'] or 'Sem Categoria Principal' for c in consumo_qtd_categoria],
+            'data': [float(c['qtd_total']) for c in consumo_qtd_categoria]
+        })
+        # ---- FIM DA CORREÇÃO ----
+
+        obras_stats_detalhado.append(stats)
+
     context = {
-        'total_solicitacoes': total_solicitacoes,
-        'solicitacoes_pendentes': solicitacoes_pendentes,
-        'solicitacoes_aprovadas': solicitacoes_aprovadas,
-        'solicitacoes_em_cotacao': solicitacoes_em_cotacao,
-        'solicitacoes_finalizadas': solicitacoes_finalizadas,
-        'solicitacoes_recebidas': solicitacoes_recebidas,
-        'solicitacoes_rejeitadas': solicitacoes_rejeitadas,
-        'obras_stats': obras_stats,
-        'usuarios_stats': usuarios_stats,
-        'solicitacoes_por_mes': solicitacoes_por_mes,
-        'valor_total_cotacoes': valor_total_cotacoes,
-        'cotacoes_por_fornecedor': cotacoes_por_fornecedor,
+        'geral': contexto_geral,
+        'obras_stats_detalhado': obras_stats_detalhado,
     }
     
     return render(request, 'materiais/dashboard_relatorios.html', context)
@@ -1980,3 +1995,88 @@ def registrar_recebimento(request):
         'scs_a_receber': scs_a_receber
     }
     return render(request, 'materiais/registrar_recebimento.html', context)
+
+@login_required
+def editar_solicitacao_analise(request, solicitacao_id):
+    # Garante que apenas engenheiros e diretores possam usar esta função.
+    if request.user.perfil not in ['engenheiro', 'diretor']:
+        messages.error(request, 'Acesso negado.')
+        return redirect('materiais:dashboard')
+
+    # Busca a solicitação que está pendente de aprovação
+    solicitacao = get_object_or_404(SolicitacaoCompra, id=solicitacao_id, status='pendente_aprovacao')
+
+    if request.method == 'POST':
+        try:
+            # A lógica para salvar os dados é a mesma da tela do escritório
+            solicitacao.obra_id = request.POST.get('obra')
+            solicitacao.destino_id = request.POST.get('destino') if request.POST.get('destino') else None
+            solicitacao.data_necessidade = request.POST.get('data_necessidade')
+            solicitacao.justificativa = request.POST.get('justificativa')
+            solicitacao.is_emergencial = request.POST.get('is_emergencial') == 'on'
+            solicitacao.categoria_sc_id = request.POST.get('categoria_sc')
+            
+            itens_json = request.POST.get('itens_json', '[]')
+            itens_data = json.loads(itens_json)
+
+            if not itens_data:
+                messages.error(request, 'A solicitação deve ter pelo menos um item.')
+                return redirect('materiais:analisar_editar_solicitacao', solicitacao_id=solicitacao.id)
+
+            with transaction.atomic():
+                # Remove os itens antigos para substituí-los pelos novos
+                solicitacao.itens.all().delete()
+                for item_data in itens_data:
+                    item_catalogo = get_object_or_404(ItemCatalogo, id=item_data.get('item_id'))
+                    ItemSolicitacao.objects.create(
+                        solicitacao=solicitacao,
+                        item_catalogo=item_catalogo,
+                        descricao=item_catalogo.descricao,
+                        unidade=item_catalogo.unidade.sigla,
+                        categoria=str(item_catalogo.categoria),
+                        quantidade=float(item_data.get('quantidade')),
+                        observacoes=item_data.get('observacao')
+                    )
+                
+                # *** PONTO CHAVE DA MUDANÇA ***
+                # Ao salvar, o status muda para o próximo passo do fluxo do engenheiro.
+                solicitacao.status = 'aprovado_engenharia'
+                solicitacao.aprovador = request.user
+                solicitacao.data_aprovacao = timezone.now()
+                solicitacao.save()
+                
+                HistoricoSolicitacao.objects.create(
+                    solicitacao=solicitacao,
+                    usuario=request.user,
+                    acao="Aprovada com Edição",
+                    detalhes="A solicitação foi editada e aprovada pelo engenheiro."
+                )
+
+            messages.success(request, f'Solicitação "{solicitacao.numero}" foi editada e aprovada com sucesso!')
+            # Redireciona de volta para a lista de análise
+            return redirect('materiais:analisar_solicitacoes')
+
+        except Exception as e:
+            messages.error(request, f'Ocorreu um erro ao salvar as alterações: {e}')
+            return redirect('materiais:analisar_editar_solicitacao', solicitacao_id=solicitacao.id)
+
+    # A lógica para carregar a página (GET) é a mesma da tela do escritório
+    itens_existentes = []
+    for item in solicitacao.itens.all():
+        itens_existentes.append({
+            "item_id": item.item_catalogo_id, "descricao": item.descricao, "unidade": item.unidade,
+            "quantidade": f"{item.quantidade:g}", "observacao": item.observacoes
+        })
+    
+    context = {
+        'solicitacao': solicitacao,
+        'itens_existentes_json': json.dumps(itens_existentes),
+        'obras': Obra.objects.filter(ativa=True).order_by('nome'),
+        'itens_catalogo_json': json.dumps(list(ItemCatalogo.objects.filter(ativo=True).values('id', 'codigo', 'descricao', 'unidade__sigla'))),
+        'categorias_sc': CategoriaSC.objects.all().order_by('nome'),
+        'destinos_entrega': DestinoEntrega.objects.all().order_by('nome'),
+    }
+    
+    # *** PONTO CHAVE DA REUTILIZAÇÃO ***
+    # Nós renderizamos o mesmo template que o escritório usa!
+    return render(request, 'materiais/editar_solicitacao.html', context)

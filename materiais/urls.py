@@ -27,6 +27,8 @@ urlpatterns = [
     path('aprovar-solicitacao/<int:solicitacao_id>/', views.aprovar_solicitacao, name='aprovar_solicitacao'),
     path('rejeitar-solicitacao/<int:solicitacao_id>/', views.rejeitar_solicitacao, name='rejeitar_solicitacao'),
     path('aprovar-parcial/<int:solicitacao_id>/', views.aprovar_parcial, name='aprovar_parcial'),
+    path('analisar/editar/<int:solicitacao_id>/', views.editar_solicitacao_analise, name='analisar_editar_solicitacao'),
+    
     path('historico-aprovacoes/', views.historico_aprovacoes, name='historico_aprovacoes'),
     path('rejeitar-pelo-escritorio/<int:solicitacao_id>/', views.rejeitar_pelo_escritorio, name='rejeitar_pelo_escritorio'),
     

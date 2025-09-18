@@ -366,9 +366,9 @@ class Recebimento(models.Model):
     data_recebimento = models.DateTimeField(default=timezone.now, verbose_name="Data de Recebimento")
     observacoes = models.TextField(blank=True, verbose_name="Observações Gerais")
     
-    nota_fiscal = models.FileField(upload_to=get_nota_fiscal_upload_path, verbose_name="Nota Fiscal")
-    sc_assinada = models.FileField(upload_to=get_sc_assinada_upload_path, verbose_name="SC Assinada")
-    boleto_comprovante = models.FileField(upload_to=get_boleto_comprovante_upload_path, verbose_name="Boleto/Comprovante")
+    nota_fiscal = models.FileField(upload_to=get_nota_fiscal_upload_path, verbose_name="Nota Fiscal", blank=True, null=True)
+    sc_assinada = models.FileField(upload_to=get_sc_assinada_upload_path, verbose_name="SC Assinada", blank=True, null=True)
+    boleto_comprovante = models.FileField(upload_to=get_boleto_comprovante_upload_path, verbose_name="Boleto/Comprovante", blank=True, null=True)
 
     def __str__(self):
         return f"Recebimento da SC {self.solicitacao.numero} em {self.data_recebimento.strftime('%d/%m/%Y')}"

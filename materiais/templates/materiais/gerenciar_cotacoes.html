@@ -18,6 +18,22 @@
     .form-control.is-invalid, .form-select.is-invalid { border-color: #dc3545; }
     .select2-container .select2-selection--single.is-invalid { border: 1px solid #dc3545 !important; }
     .select2-container .select2-selection--multiple.is-invalid { border: 1px solid #dc3545 !important; }
+    
+    /* --- PADRÃO DE BOTÕES CORRIGIDO --- */
+    .btn {
+        font-weight: 500;
+        /* A borda agora tem a cor do fundo, mantendo o visual flat sem quebrar botões divididos */
+        transition: filter 0.15s ease-in-out;
+    }
+    .btn:hover {
+        filter: brightness(90%);
+    }
+    .btn.btn-success { background-color: #198754; color: white; border-color: #198754; }
+    .btn.btn-warning { background-color: #ffc107; color: #000; border-color: #ffc107; }
+    .btn.btn-danger { background-color: #dc3545; color: white; border-color: #dc3545; }
+    .btn.btn-secondary { background-color: #6c757d; color: white; border-color: #6c757d; }
+    .btn.btn-primary { background-color: #0d6efd; color: white; border-color: #0d6efd; }
+
 </style>
 
 <div class="d-flex align-items-center mb-3">
@@ -54,10 +70,10 @@
                 </div>
                 <div class="col-md-5 text-end">
                     <div class="btn-group">
-                        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalDetalhesSC" data-sc-id="{{ sc.id }}" data-modal-type="action">
+                        <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalDetalhesSC" data-sc-id="{{ sc.id }}" data-modal-type="action">
                             <i class="fas fa-play"></i> Iniciar Cotação
                         </button>
-                        <button type="button" class="btn btn-primary dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown"></button>
+                        <button type="button" class="btn btn-success dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown"></button>
                         <ul class="dropdown-menu">
                             <li><a class="dropdown-item" href="{% url 'materiais:escritorio_editar_sc' sc.id %}"><i class="fas fa-edit fa-fw me-2"></i> Editar</a></li>
                             <li><button class="dropdown-item" onclick="abrirModalRejeicao('{{ sc.id }}', '{{ sc.nome_descritivo }}')"><i class="fas fa-times fa-fw me-2 text-danger"></i> Rejeitar</button></li>
@@ -69,12 +85,12 @@
             </div>
         </div>
     </div>
-{% empty %}
-<div class="text-center p-5">
-    <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
-    <h5>Nenhuma solicitação nova para iniciar a cotação.</h5>
-</div>
-{% endfor %}
+    {% empty %}
+    <div class="text-center p-5">
+        <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
+        <h5>Nenhuma solicitação nova para iniciar a cotação.</h5>
+    </div>
+    {% endfor %}
   </div>
   
   <div class="tab-pane fade p-3" id="em-cotacao" role="tabpanel">
@@ -91,23 +107,19 @@
                     </div>
                 </div>
                 <div class="col-md-4 text-end">
-                    <button class="btn btn-info" 
-                            data-bs-toggle="modal" 
-                            data-bs-target="#solicitarCotacaoModal" 
-                            data-sc-id="{{ sc.id }}" 
-                            data-sc-name="{{ sc.nome_descritivo }}">
+                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#solicitarCotacaoModal" data-sc-id="{{ sc.id }}" data-sc-name="{{ sc.nome_descritivo }}">
                         <i class="fas fa-plus"></i> Solicitar Cotação
                     </button>
                 </div>
             </div>
         </div>
     </div>
-{% empty %}
-<div class="text-center p-5">
-    <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
-    <h5>Nenhuma solicitação em cotação no momento.</h5>
-</div>
-{% endfor %}
+    {% empty %}
+    <div class="text-center p-5">
+        <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
+        <h5>Nenhuma solicitação em cotação no momento.</h5>
+    </div>
+    {% endfor %}
   </div>
 
 <div class="tab-pane fade p-3" id="aguardando" role="tabpanel">
@@ -138,17 +150,17 @@
                                 <strong>{{ envio.fornecedor.nome }}</strong>
                                 <small class="d-block text-muted">Enviado em: {{ envio.data_envio|date:"d/m/Y" }} | Prazo: {{ envio.prazo_resposta|date:"d/m/Y" }}</small>
                             </div>
-                            <a href="{% url 'materiais:iniciar_cotacao_fornecedor' solicitacao_id=sc.id fornecedor_id=envio.fornecedor.id %}" class="btn btn-warning btn-sm"><i class="fas fa-plus"></i> Registrar Preços</a>
+                            <a href="{% url 'materiais:iniciar_cotacao_fornecedor' solicitacao_id=sc.id fornecedor_id=envio.fornecedor.id %}" class="btn btn-warning"><i class="fas fa-plus"></i> Registrar Preços</a>
                         </div>
                     {% endfor %}
                 </div>
             </div>
-{% empty %}
-    <div class="text-center p-5">
-        <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
-        <h5>Nenhuma solicitação aguardando resposta.</h5>
-    </div>
-{% endfor %}
+        {% empty %}
+            <div class="text-center p-5">
+                <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
+                <h5>Nenhuma solicitação aguardando resposta.</h5>
+            </div>
+        {% endfor %}
     </div>
     
     <hr>
@@ -182,7 +194,7 @@
                             {% if envio.fornecedor_id in sc.cotacoes_recebidas_ids %}
                                 <span class="badge bg-success"><i class="fas fa-check"></i> Cotação Registrada</span>
                             {% else %}
-                                <a href="{% url 'materiais:iniciar_cotacao_fornecedor' solicitacao_id=sc.id fornecedor_id=envio.fornecedor.id %}" class="btn btn-warning btn-sm"><i class="fas fa-plus"></i> Registrar Preços</a>
+                                <a href="{% url 'materiais:iniciar_cotacao_fornecedor' solicitacao_id=sc.id fornecedor_id=envio.fornecedor.id %}" class="btn btn-warning"><i class="fas fa-plus"></i> Registrar Preços</a>
                             {% endif %}
                         </div>
                     {% endfor %}
@@ -236,9 +248,9 @@
                         <div class="col-md-3 d-flex align-items-center justify-content-end gap-2">
                             <form action="{% url 'materiais:rejeitar_cotacao' cotacao.id %}" method="post" onsubmit="return confirm('Tem certeza que deseja rejeitar esta cotação?');">
                                 {% csrf_token %}
-                                <button type="submit" class="btn btn-sm btn-outline-danger">Rejeitar</button>
+                                <button type="submit" class="btn btn-danger">Rejeitar</button>
                             </form>
-                            <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#confirmarVencedorModal" data-cotacao-id="{{ cotacao.id }}">
+                            <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#confirmarVencedorModal" data-cotacao-id="{{ cotacao.id }}">
                                 <i class="fas fa-check"></i> Transformar em RM
                             </button>
                         </div>
@@ -248,14 +260,13 @@
             {% endfor %}
         </div>
     </div>
-{% empty %}
-<div class="text-center p-5">
-    <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
-    <h5>Nenhuma cotação recebida ou pronta para análise.</h5>
-</div>
-{% endfor %}
+    {% empty %}
+    <div class="text-center p-5">
+        <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
+        <h5>Nenhuma cotação recebida ou pronta para análise.</h5>
+    </div>
+    {% endfor %}
   </div>
-
 </div>
 
 <form id="rejectForm" method="post" style="display: none;">{% csrf_token %}<input type="hidden" name="motivo" id="rejectMotivo"></form>
@@ -267,7 +278,7 @@
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title" id="confirmarVencedorModalLabel">Confirmar Início de Cotação</h5>
+        <h5 class="modal-title" id="confirmarVencedorModalLabel">Confirmar Geração de RM</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body" id="confirmarVencedorBody">
@@ -277,13 +288,12 @@
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
         <form id="formConfirmarVencedor" method="post" style="display: inline;">
             {% csrf_token %}
-            <button type="submit" class="btn btn-success">Confirmar e Iniciar</button>
+            <button type="submit" class="btn btn-success">Confirmar e Gerar RM</button>
         </form>
       </div>
     </div>
   </div>
 </div>
-
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
@@ -385,28 +395,22 @@ document.addEventListener('DOMContentLoaded', function() {
             
             formConfirmar.action = `/cotacao/${cotacaoId}/selecionar/`;
             modalBody.innerHTML = '<p class="text-center">Carregando dados...</p>';
-            modalTitle.textContent = 'Confirmar Início de Cotação'; // Título genérico do print
-            confirmButton.textContent = 'Confirmar e Iniciar'; // Texto do botão do print
+            modalTitle.textContent = 'Confirmar Geração de RM'; 
+            confirmButton.textContent = 'Confirmar e Gerar RM'; 
 
             fetch(`/api/dados-confirmacao-rm/${cotacaoId}/`)
                 .then(response => response.json())
                 .then(data => {
-                    // Atualiza título e botão para o contexto real de RM
-                    modalTitle.textContent = 'Confirmar Geração de RM';
-                    confirmButton.textContent = 'Confirmar e Gerar RM';
-                    
-                    // Monta o HTML com o visual do print
-                    let html = `<p>Tem certeza que deseja mover a solicitação abaixo para a etapa de cotação?</p>
-                                <p><strong>SC:</strong> ${data.vencedora.fornecedor} - <strong>Valor:</strong> ${data.vencedora.valor}</p>
+                    let html = `<p>Tem certeza que deseja selecionar a cotação abaixo e gerar a Requisição de Material?</p>
+                                <p><strong>Fornecedor:</strong> ${data.vencedora.fornecedor}<br><strong>Valor Total:</strong> ${data.vencedora.valor}</p>
                                 <div class="alert alert-warning">
-                                    <strong>Atenção:</strong> Após a confirmação, não será mais possível editar os itens e
-                                    informações. A SC será movida para a aba "Em Cotação".
+                                    <strong>Atenção:</strong> Após a confirmação, esta ação não poderá ser desfeita.
                                 </div>`;
                     
                     if (data.pendentes.length > 0) {
                          html += `<div class="alert alert-danger small mt-2">
-                                     <strong>Aviso extra:</strong> As respostas pendentes de 
-                                     <strong>${data.pendentes.join(', ')}</strong> também serão ignoradas.
+                                     <strong>Aviso:</strong> As respostas pendentes de 
+                                     <strong>${data.pendentes.join(', ')}</strong> serão ignoradas.
                                   </div>`;
                     }
                     
