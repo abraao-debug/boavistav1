@@ -79,7 +79,10 @@
         </div>
     </div>
     {% empty %}
-    <div class="text-center p-5 text-muted"><p>Nenhuma RM pendente de primeira assinatura.</p></div>
+    <div class="text-center p-5">
+        <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
+        <h5>Nenhuma RM pendente de primeira assinatura.</h5>
+    </div>
     {% endfor %}
   </div>
 
@@ -103,9 +106,12 @@
             </div>
         </div>
     </div>
-    {% empty %}
-    <div class="text-center p-5 text-muted"><p>Nenhuma RM aguardando a segunda assinatura.</p></div>
-    {% endfor %}
+{% empty %}
+<div class="text-center p-5">
+    <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
+    <h5>Nenhuma RM aguardando a segunda assinatura.</h5>
+</div>
+{% endfor %}
   </div>
 
 <div class="tab-pane container fade" id="assinadas">
@@ -144,9 +150,12 @@
             </div>
         </div>
     </div>
-    {% empty %}
-    <div class="text-center p-5 text-muted"><p>Nenhuma RM assinada ou pronta para envio.</p></div>
-    {% endfor %}
+{% empty %}
+<div class="text-center p-5">
+    <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
+    <h5>Nenhuma RM assinada ou pronta para envio.</h5>
+</div>
+{% endfor %}
   </div>
 </div>
 

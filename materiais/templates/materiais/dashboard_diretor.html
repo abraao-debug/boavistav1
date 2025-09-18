@@ -14,7 +14,7 @@
 {% include 'materiais/_cards_status.html' %}
 
 <div class="row mt-4">
-    <div class="col-md-6 mb-3">
+    <div class="col-lg-6 mb-4">
         <a href="{% url 'materiais:nova_solicitacao' %}" class="main-action-card card-solicitacao mb-3">
             <div class="icon"><i class="fas fa-file-alt"></i></div>
             <div class="card-text">
@@ -29,39 +29,22 @@
         </div>
     </div>
 
-    <div class="col-md-6 mb-3">
-        <a href="{% url 'materiais:analisar_solicitacoes' %}" class="main-action-card card-analisar mb-3">
-            <div class="icon"><i class="fas fa-tasks"></i></div>
-            <div class="card-text">
-                <h5>Analisar Solicitações</h5>
-                <p>Revisar SCs do almoxarife da obra</p>
-            </div>
-        </a>
-        <div class="d-grid">
-            <a href="#" class="btn btn-outline-secondary">
-                <i class="fas fa-history"></i> Histórico de Aprovação
-            </a>
-        </div>
-    </div>
-</div>
-
-<div class="row">
-    <div class="col-md-6 mb-3">
-        <a href="{% url 'materiais:gerenciar_cotacoes' %}" class="main-action-card card-analisar mb-3" style="background-color: #f3e8ff; border-color: #d8b4fe;">
-            <div class="icon" style="background-color: #8f48cf;"><i class="fas fa-dollar-sign"></i></div>
+    <div class="col-lg-6 mb-4">
+        <a href="{% url 'materiais:gerenciar_cotacoes' %}" class="main-action-card card-analisar mb-3">
+            <div class="icon"><i class="fas fa-dollar-sign"></i></div>
             <div class="card-text">
                 <h5>Cotações</h5>
                 <p>Gerenciar cotações e fornecedores</p>
             </div>
         </a>
-        <div class="d-grid">
-            <a href="#" class="btn btn-outline-secondary">
-                <i class="fas fa-map"></i> Mapa de Cotações
+         <div class="d-grid">
+            <a href="{% url 'materiais:gerenciar_fornecedores' %}" class="btn btn-outline-secondary">
+                <i class="fas fa-truck"></i> Gerenciar Fornecedores
             </a>
         </div>
     </div>
 
-    <div class="col-md-6 mb-3">
+    <div class="col-lg-6 mb-4">
         <a href="{% url 'materiais:gerenciar_requisicoes' %}" class="main-action-card card-receber mb-3">
             <div class="icon"><i class="fas fa-file-signature"></i></div>
             <div class="card-text">
@@ -71,10 +54,41 @@
         </a>
         <div class="d-grid">
             <a href="#" class="btn btn-outline-secondary">
-                <i class="fas fa-tasks"></i> Gerenciar Requisições
+                <i class="fas fa-history"></i> Histórico de RM
             </a>
+        </div>
+    </div>
+    
+    <div class="col-lg-6 mb-4">
+        <a href="{% url 'materiais:dashboard_relatorios' %}" class="main-action-card card-solicitacao mb-3" style="background-color: #e3f2fd; border-color: #bbdefb;">
+            <div class="icon" style="background-color: #2196f3;"><i class="fas fa-chart-bar"></i></div>
+            <div class="card-text">
+                <h5>Relatórios</h5>
+                <p>Visualizar dados e estatísticas</p>
+            </div>
+        </a>
+        <div class="d-grid">
+             <a href="#" class="btn btn-outline-secondary"><i class="fas fa-eye"></i> Ver Tudo</a>
         </div>
     </div>
 </div>
 
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-cogs"></i> Todos os Links</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-flex flex-wrap gap-2">
+                    <a href="{% url 'materiais:minhas_solicitacoes' %}" class="btn btn-outline-secondary"><i class="fas fa-list"></i> Minhas Solicitações</a>
+                    <a href="{% url 'materiais:cadastrar_itens' %}" class="btn btn-outline-success"><i class="fas fa-plus"></i> Cadastrar Itens</a>
+                    <a href="{% url 'materiais:cadastrar_obras' %}" class="btn btn-outline-warning"><i class="fas fa-building"></i> Cadastrar Obras</a>
+                    <a href="{% url 'materiais:gerenciar_fornecedores' %}" class="btn btn-outline-primary"><i class="fas fa-truck"></i> Gerenciar Fornecedores</a>
+                    <a href="{% url 'materiais:gerenciar_categorias' %}" class="btn btn-outline-dark"><i class="fas fa-tags"></i> Gerenciar Categorias</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}

@@ -4,7 +4,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.http import JsonResponse
 from django.utils import timezone
-from django.db.models import Count, Q, Sum
+from django.db.models import Count, Q, Sum, F, DecimalField
 from django.views.decorators.csrf import csrf_exempt
 from difflib import SequenceMatcher
 from .forms import SolicitacaoCompraForm
@@ -1024,15 +1024,25 @@ def dashboard_relatorios(request):
         total=Count('id')
     ).order_by('mes')
     
-    # Corrigido para usar a propriedade 'valor_total'
     valor_total_cotacoes = sum(c.valor_total for c in Cotacao.objects.filter(vencedora=True))
     
+    # --- INÍCIO DA CORREÇÃO ---
+    # A consulta foi reescrita para calcular a soma diretamente no banco de dados.
     cotacoes_por_fornecedor = Cotacao.objects.filter(vencedora=True).values(
         'fornecedor__nome_fantasia'
     ).annotate(
         total_cotacoes=Count('id'),
-        valor_total=Sum('valor_total')
-    ).order_by('-valor_total')[:5]
+        soma_fretes=Sum('valor_frete'),
+        soma_itens=Sum(
+            F('itens_cotados__preco') * F('itens_cotados__item_solicitacao__quantidade'),
+            output_field=DecimalField()
+        )
+    ).annotate(
+        valor_total=F('soma_fretes') + F('soma_itens')
+    ).order_by('-valor_total').values(
+        'fornecedor__nome_fantasia', 'total_cotacoes', 'valor_total'
+    )[:5]
+    # --- FIM DA CORREÇÃO ---
     
     context = {
         'total_solicitacoes': total_solicitacoes,

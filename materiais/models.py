@@ -1,3 +1,4 @@
+import os
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.utils import timezone
@@ -8,8 +9,7 @@ class User(AbstractUser):
         ('almoxarife_obra', 'Almoxarife da Obra'),
         ('engenheiro', 'Engenheiro'),
         ('almoxarife_escritorio', 'Almoxarife do Escritório'),
-        ('diretor', 'Diretor'), # <-- LINHA ADICIONADA
-
+        ('diretor', 'Diretor'),
     ]
     perfil = models.CharField(max_length=30, choices=PERFIL_CHOICES)
     telefone = models.CharField(max_length=15, blank=True)
@@ -37,34 +37,26 @@ class Fornecedor(models.Model):
         ('ambos', 'Ambos'),
     ]
     
-    # Dados da Empresa
     nome_fantasia = models.CharField(max_length=200, verbose_name="Nome Fantasia")
     razao_social = models.CharField(max_length=200, verbose_name="Razão Social")
     cnpj = models.CharField(max_length=18, unique=True)
     tipo = models.CharField(max_length=10, choices=TIPO_CHOICES, default='material', verbose_name="Tipo")
     produtos_fornecidos = models.ManyToManyField(
-        'CategoriaItem', # Adicionadas aspas aqui
+        'CategoriaItem',
         blank=True,
         verbose_name="Produtos/Serviços Fornecidos",
-        # Limita as escolhas apenas para subcategorias
         limit_choices_to={'categoria_mae__isnull': False}
     )
-    
-    # Contato
     email = models.EmailField()
     contato_nome = models.CharField(max_length=100, blank=True, verbose_name="Nome do Contato")
     contato_telefone = models.CharField(max_length=15, blank=True, verbose_name="Telefone do Contato")
     contato_whatsapp = models.CharField(max_length=15, blank=True, verbose_name="WhatsApp do Contato")
-
-    # Endereço
     cep = models.CharField(max_length=9, blank=True, verbose_name="CEP")
     logradouro = models.CharField(max_length=255, blank=True, verbose_name="Logradouro")
     numero = models.CharField(max_length=20, blank=True, verbose_name="Número")
     bairro = models.CharField(max_length=100, blank=True, verbose_name="Bairro")
     cidade = models.CharField(max_length=100, blank=True, verbose_name="Cidade")
     estado = models.CharField(max_length=2, blank=True, verbose_name="UF")
-
-    # Status
     ativo = models.BooleanField(default=True)
 
     def __str__(self):
@@ -187,7 +179,7 @@ class SolicitacaoCompra(models.Model):
         ('cotacao_selecionada', 'Cotação - Recebida/Analisar'),
         ('finalizada', 'RM Gerada'),
         ('a_caminho', 'A Caminho'),
-        ('recebida_parcial', 'Recebida Parcialmente'), # <--- ADICIONE ESTA LINHA
+        ('recebida_parcial', 'Recebida Parcialmente'),
         ('recebida', 'Recebida'),
     ]
     numero = models.CharField(max_length=100, unique=True, blank=True, verbose_name="Código")
@@ -226,25 +218,18 @@ class SolicitacaoCompra(models.Model):
     )
 
     def save(self, *args, **kwargs):
-        # Gera o número apenas se ele não existir
         if not self.numero:
             with transaction.atomic():
-                # Lógica para SCs Filhas
                 if self.sc_mae:
                     num_filhas = SolicitacaoCompra.objects.select_for_update().filter(sc_mae=self.sc_mae).count()
                     self.numero = f"{self.sc_mae.numero}-F{num_filhas + 1}"
-                
-                # Lógica para SCs Mãe (baseada na sua versão funcional)
                 else:
                     hoje = timezone.now().date()
                     data_str = hoje.strftime('%Y-%m-%d')
-                    
-                    # Busca todos os números do dia para encontrar o maior sequencial
                     scs_do_dia = SolicitacaoCompra.objects.select_for_update().filter(
                         numero__startswith=data_str,
                         sc_mae__isnull=True
                     ).values_list('numero', flat=True)
-                    
                     maior_sequencial = 0
                     for num in scs_do_dia:
                         try:
@@ -253,10 +238,8 @@ class SolicitacaoCompra(models.Model):
                                 maior_sequencial = sequencial
                         except (ValueError, IndexError):
                             continue
-                            
                     proximo_sequencial = maior_sequencial + 1
                     self.numero = f"{data_str}-{proximo_sequencial:03d}"
-        
         super().save(*args, **kwargs)
 
     @property
@@ -271,15 +254,9 @@ class SolicitacaoCompra(models.Model):
         ano_str = data.strftime('%Y')
         categoria_nome = self.categoria_sc.nome if self.categoria_sc else "Geral"
         
-        # Corrigido para não incluir o número duas vezes
-        return f"{semana_do_mes}ª semana/{mes_str}/{ano_str} - {categoria_nome}"
-
-    def __str__(self):
-        return self.numero or f"SC ID {self.id} (sem número)"
-
-    class Meta:
-        verbose_name = "Solicitação de Compra"
-        verbose_name_plural = "Solicitações de Compra"
+        # --- LINHA CORRIGIDA ---
+        # Adicionamos o self.numero ao final do nome descritivo
+        return f"{semana_do_mes}ª semana/{mes_str}/{ano_str} - {categoria_nome} - {self.numero}"
 
 class ItemSolicitacao(models.Model):
     solicitacao = models.ForeignKey(SolicitacaoCompra, on_delete=models.CASCADE, related_name='itens')
@@ -301,11 +278,10 @@ class ItemSolicitacao(models.Model):
 class RequisicaoMaterial(models.Model):
     STATUS_ASSINATURA_CHOICES = [
         ('pendente', 'Pendente de Assinaturas'),
-        ('aguardando_diretor', 'Aguardando Diretor'), # <--- CORRIGIDO
+        ('aguardando_diretor', 'Aguardando Diretor'),
         ('assinada', 'Assinada'),
         ('enviada', 'Enviada para Fornecedor'),
     ]
-    
     solicitacao_origem = models.OneToOneField(SolicitacaoCompra, on_delete=models.CASCADE, related_name='requisicao')
     cotacao_vencedora = models.OneToOneField('Cotacao', on_delete=models.CASCADE)
     numero = models.CharField(max_length=20, unique=True, verbose_name="Número RM")
@@ -361,30 +337,38 @@ class ItemRequisicao(models.Model):
         verbose_name = "Item da Requisição"
         verbose_name_plural = "Itens da Requisição"
 
-def get_recebimento_upload_path(instance, filename):
-    """
-    Cria um caminho dinâmico para os uploads de recebimento:
-    media/recebimentos/ANO-MES-DIA/NUMERO_DA_RM/nome_original_do_arquivo.ext
-    """
+def get_nota_fiscal_upload_path(instance, filename):
+    return get_recebimento_upload_path(instance, filename, "NF")
+
+def get_sc_assinada_upload_path(instance, filename):
+    return get_recebimento_upload_path(instance, filename, "SC-ASSINADA")
+
+def get_boleto_comprovante_upload_path(instance, filename):
+    return get_recebimento_upload_path(instance, filename, "BOLETO")
+
+def get_recebimento_upload_path(instance, filename, tipo_documento):
     data_hoje = timezone.now().strftime('%Y-%m-%d')
-    # Tenta pegar o número da RM. Se não existir, usa o número da SC como fallback.
+    sc_numero = str(instance.solicitacao.numero).replace('/', '-')
+    rm_numero = "N_A"
     try:
-        identificador = instance.solicitacao.requisicao.numero
+        rm_numero = str(instance.solicitacao.requisicao.numero).replace('/', '-')
     except RequisicaoMaterial.DoesNotExist:
-        identificador = instance.solicitacao.numero
-        
-    return f'recebimentos/{data_hoje}/{identificador}/{filename}'
+        pass
+    nome_base, ext = os.path.splitext(filename)
+    novo_nome = f"{tipo_documento}_{sc_numero}_{rm_numero}{ext}"
+    identificador_pasta = rm_numero if rm_numero != "N_A" else sc_numero
+    return f'recebimentos/{data_hoje}/{identificador_pasta}/{novo_nome}'
 
 class Recebimento(models.Model):
-    solicitacao = models.ForeignKey(SolicitacaoCompra, on_delete=models.PROTECT, related_name='recebimentos', verbose_name="Solicitação de Compra")
+    # ALTERAÇÃO PARA TESTES: models.PROTECT alterado para models.CASCADE
+    solicitacao = models.ForeignKey(SolicitacaoCompra, on_delete=models.CASCADE, related_name='recebimentos', verbose_name="Solicitação de Compra")
     recebedor = models.ForeignKey(User, on_delete=models.PROTECT, verbose_name="Recebedor")
     data_recebimento = models.DateTimeField(default=timezone.now, verbose_name="Data de Recebimento")
     observacoes = models.TextField(blank=True, verbose_name="Observações Gerais")
     
-    # Campos para os documentos obrigatórios USANDO A NOVA FUNÇÃO
-    nota_fiscal = models.FileField(upload_to=get_recebimento_upload_path, verbose_name="Nota Fiscal")
-    sc_assinada = models.FileField(upload_to=get_recebimento_upload_path, verbose_name="SC Assinada")
-    boleto_comprovante = models.FileField(upload_to=get_recebimento_upload_path, verbose_name="Boleto/Comprovante")
+    nota_fiscal = models.FileField(upload_to=get_nota_fiscal_upload_path, verbose_name="Nota Fiscal")
+    sc_assinada = models.FileField(upload_to=get_sc_assinada_upload_path, verbose_name="SC Assinada")
+    boleto_comprovante = models.FileField(upload_to=get_boleto_comprovante_upload_path, verbose_name="Boleto/Comprovante")
 
     def __str__(self):
         return f"Recebimento da SC {self.solicitacao.numero} em {self.data_recebimento.strftime('%d/%m/%Y')}"
@@ -396,9 +380,10 @@ class Recebimento(models.Model):
 
 class ItemRecebido(models.Model):
     recebimento = models.ForeignKey(Recebimento, on_delete=models.CASCADE, related_name='itens_recebidos')
-    item_solicitado = models.ForeignKey(ItemSolicitacao, on_delete=models.PROTECT, related_name='recebimentos')
+    # ALTERAÇÃO PARA TESTES: models.PROTECT alterado para models.CASCADE
+    item_solicitado = models.ForeignKey(ItemSolicitacao, on_delete=models.CASCADE, related_name='recebimentos')
     quantidade_recebida = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Quantidade Recebida")
-    observacoes = models.TextField(blank=True) # <--- ADICIONE ESTA LINHA
+    observacoes = models.TextField(blank=True)
 
     def __str__(self):
         return f"{self.quantidade_recebida} x {self.item_solicitado.descricao}"
@@ -415,7 +400,6 @@ class Cotacao(models.Model):
     condicao_pagamento = models.CharField(max_length=100, blank=True, verbose_name="Condição de Pagamento")
     observacoes = models.TextField(blank=True, verbose_name="Observações")
     vencedora = models.BooleanField(default=False, verbose_name="Cotação Vencedora")
-    # --- CAMPOS ADICIONADOS ---
     valor_frete = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="Valor do Frete")
     endereco_entrega = models.ForeignKey(DestinoEntrega, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Endereço de Entrega")
 
@@ -485,4 +469,3 @@ class EnvioCotacao(models.Model):
     class Meta:
         verbose_name = "Envio de Cotação"
         verbose_name_plural = "Envios de Cotação"
-

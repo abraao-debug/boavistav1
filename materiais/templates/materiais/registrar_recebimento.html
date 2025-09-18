@@ -4,124 +4,201 @@
 {% block content %}
 <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 <style>
-    .select2-container .select2-selection--single { height: calc(1.5em + .75rem + 2px); }
-    #itens-container .card-body { background-color: #f8f9fa; }
-    .upload-box { border: 2px dashed #dee2e6; border-radius: .375rem; padding: 2rem; text-align: center; cursor: pointer; transition: background-color 0.2s ease-in-out; }
-    .upload-box:hover { background-color: #f1f3f5; }
-    .upload-box p { margin-bottom: 0; }
-    .file-name { font-weight: bold; color: #0d6efd; }
-    
-    /* Regra de CSS para destacar caixas de upload com erro */
+    /* Estilos do protótipo para a página de recebimento */
+    body {
+        background-color: #f8f9fa;
+    }
+    .card {
+        border: none;
+        border-radius: 0.5rem;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        margin-bottom: 1.5rem;
+    }
+    .card-header, .card-body, .card-footer {
+        background-color: #fff;
+        border-color: #e9ecef;
+    }
+    .card-header h5 {
+        font-weight: 600;
+        color: #343a40;
+    }
+    .select2-container--default .select2-selection--single {
+        height: calc(1.5em + .75rem + 2px);
+        border: 1px solid #ced4da;
+        border-radius: 0.375rem;
+    }
+    .select2-container--default .select2-selection--single .select2-selection__rendered {
+        line-height: 38px;
+    }
+    .select2-container--default .select2-selection--single .select2-selection__arrow {
+        height: 36px;
+    }
+    .info-banner {
+        background-color: #e7f3ff;
+        border-left: 4px solid #0d6efd;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        border-radius: 0.375rem;
+    }
+    .item-card {
+        background-color: #fff;
+        border: 1px solid #e9ecef;
+        border-radius: 0.5rem;
+        padding: 1rem;
+        transition: all 0.2s ease-in-out;
+    }
+    .item-card.selected {
+        background-color: #e6f7ff;
+        border-color: #0d6efd;
+    }
+    .upload-box {
+        border: 2px dashed #dee2e6;
+        border-radius: .375rem;
+        padding: 2rem;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.2s ease-in-out;
+        background-color: #f8f9fa;
+    }
+    .upload-box:hover {
+        background-color: #e9ecef;
+        border-color: #0d6efd;
+    }
     .upload-box.is-invalid {
-        border-color: #dc3545; /* Cor de erro do Bootstrap */
+        border-color: #dc3545;
+    }
+    .file-name {
+        font-weight: bold;
+        color: #0d6efd;
+        margin-top: 0.5rem;
+        display: block;
+    }
+    .btn-confirm {
+        background-color: #198754;
+        color: white;
+    }
+    .btn-confirm:disabled {
+        background-color: #6c757d;
     }
 </style>
 
-<div class="d-flex align-items-center mb-3">
-    <a href="{% url 'materiais:dashboard' %}" class="btn btn-secondary me-3"><i class="fas fa-arrow-left"></i> Voltar</a>
-    <div>
-        <h4 class="mb-0">Receber Material</h4>
-        <p class="text-muted mb-0">Registre o recebimento de materiais por item.</p>
+<div class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <div class="d-flex align-items-center mb-4">
+                <a href="{% url 'materiais:dashboard' %}" class="btn btn-light border me-3"><i class="fas fa-arrow-left"></i> Voltar</a>
+                <div>
+                    <h4 class="mb-0">Receber Material</h4>
+                    <p class="text-muted mb-0">Registre o recebimento de materiais por item.</p>
+                </div>
+            </div>
+
+            <form method="POST" enctype="multipart/form-data" id="form-recebimento">
+                {% csrf_token %}
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title mb-3">Selecionar Solicitação de Compra</h5>
+                        <div class="mb-3">
+                            <label for="sc-select" class="form-label">SC para dar baixa *</label>
+                            <select id="sc-select" name="solicitacao_id" class="form-select" required>
+                                <option value="" selected disabled>Selecione a SC para recebimento</option>
+                                {% for sc in scs_a_receber %}
+                                    <option value="{{ sc.id }}">{{ sc.nome_descritivo }} ({{ sc.obra.nome }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="dynamic-content" class="d-none">
+                    <div class="card" id="detalhes-sc-container">
+                        <div class="card-body" id="detalhes-sc-content"></div>
+                    </div>
+
+                    <div class="card" id="itens-container">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">Selecionar Itens Recebidos</h5>
+                            <div>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-selecionar-todos">Selecionar Todos</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-desmarcar-todos">Desmarcar Todos</button>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div id="info-banner-container"></div>
+                            <div id="lista-itens-receber">
+                                <p class="text-muted text-center p-4">Selecione uma SC para carregar os itens.</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <div class="card-header"><h5 class="mb-0">Documentos Obrigatórios</h5></div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-4 mb-3">
+                                    <label class="form-label">Nota Fiscal *</label>
+                                    <div class="upload-box" onclick="this.querySelector('input').click()">
+                                        <input type="file" name="nota_fiscal" class="d-none" required onchange="updateFileName(this)" accept="image/*,application/pdf">
+                                        <p><i class="fas fa-upload fa-2x text-muted"></i></p>
+                                        <p class="upload-text">Clique para anexar a nota fiscal</p>
+                                        <span class="file-name"></span>
+                                    </div>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label class="form-label">SC Assinada *</label>
+                                    <div class="upload-box" onclick="this.querySelector('input').click()">
+                                        <input type="file" name="sc_assinada" class="d-none" required onchange="updateFileName(this)" accept="image/*,application/pdf">
+                                        <p><i class="fas fa-upload fa-2x text-muted"></i></p>
+                                        <p class="upload-text">Clique para anexar a SC assinada</p>
+                                        <span class="file-name"></span>
+                                    </div>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label class="form-label">Boleto/Comprovante *</label>
+                                    <div class="upload-box" onclick="this.querySelector('input').click()">
+                                        <input type="file" name="boleto_comprovante" class="d-none" required onchange="updateFileName(this)" accept="image/*,application/pdf">
+                                        <p><i class="fas fa-upload fa-2x text-muted"></i></p>
+                                        <p class="upload-text">Clique para anexar o boleto</p>
+                                        <span class="file-name"></span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="observacoes" class="form-label">Observações Gerais do Recebimento</label>
+                                <textarea name="observacoes" id="observacoes" class="form-control" rows="3"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="text-end mt-3">
+                        <a href="{% url 'materiais:dashboard' %}" class="btn btn-light border">Cancelar</a>
+                        <button type="submit" id="btn-confirmar" class="btn btn-success" disabled>
+                            Confirmar Recebimento (0 itens)
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
     </div>
 </div>
-<hr class="mb-4">
-
-<form method="POST" enctype="multipart/form-data" id="form-recebimento">
-    {% csrf_token %}
-    <div class="card mb-4">
-        <div class="card-body">
-            <h5 class="card-title">1. Selecionar Solicitação de Compra</h5>
-            <div class="mb-3">
-                <label for="sc-select" class="form-label">SC para dar baixa *</label>
-                <select id="sc-select" name="solicitacao_id" class="form-select" required>
-                    <option value="" selected disabled>Selecione uma SC para recebimento</option>
-                    {% for sc in scs_a_receber %}
-                        <option value="{{ sc.id }}">{{ sc.nome_descritivo }} ({{ sc.obra.nome }})</option>
-                    {% endfor %}
-                </select>
-            </div>
-        </div>
-    </div>
-    
-    <div id="dynamic-content" class="d-none">
-        <div class="card mb-4" id="detalhes-sc-container">
-             <div class="card-body" id="detalhes-sc-content"></div>
-        </div>
-
-        <div class="card mb-4" id="itens-container">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">2. Selecionar Itens Recebidos</h5>
-                <div>
-                    <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-selecionar-todos">Selecionar Todos</button>
-                    <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-desmarcar-todos">Desmarcar Todos</button>
-                </div>
-            </div>
-            <div class="card-body p-3" id="lista-itens-receber">
-                <p class="text-muted text-center p-4">Selecione uma SC para carregar os itens.</p>
-            </div>
-        </div>
-        
-        <div class="card mb-4">
-            <div class="card-header"><h5 class="mb-0">3. Documentos Obrigatórios</h5></div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-4 mb-3">
-                        <label class="form-label">Nota Fiscal *</label>
-                        <div class="upload-box" onclick="this.querySelector('input').click()">
-                            <input type="file" name="nota_fiscal" class="d-none" required onchange="updateFileName(this)" accept="image/*" capture="environment">
-                            <p><i class="fas fa-upload"></i> <span class="upload-text">Clique para anexar</span></p>
-                            <p class="file-name"></p>
-                        </div>
-                    </div>
-                    <div class="col-md-4 mb-3">
-                        <label class="form-label">SC Assinada *</label>
-                        <div class="upload-box" onclick="this.querySelector('input').click()">
-                            <input type="file" name="sc_assinada" class="d-none" required onchange="updateFileName(this)" accept="image/*" capture="environment">
-                             <p><i class="fas fa-upload"></i> <span class="upload-text">Clique para anexar</span></p>
-                             <p class="file-name"></p>
-                        </div>
-                    </div>
-                    <div class="col-md-4 mb-3">
-                        <label class="form-label">Boleto/Comprovante *</label>
-                         <div class="upload-box" onclick="this.querySelector('input').click()">
-                            <input type="file" name="boleto_comprovante" class="d-none" required onchange="updateFileName(this)" accept="image/*" capture="environment">
-                             <p><i class="fas fa-upload"></i> <span class="upload-text">Clique para anexar</span></p>
-                             <p class="file-name"></p>
-                        </div>
-                    </div>
-                </div>
-                 <div class="mb-3">
-                    <label for="observacoes" class="form-label">Observações Gerais do Recebimento</label>
-                    <textarea name="observacoes" id="observacoes" class="form-control" rows="3"></textarea>
-                </div>
-            </div>
-        </div>
-        
-        <div class="text-end">
-            <a href="{% url 'materiais:dashboard' %}" class="btn btn-light border">Cancelar</a>
-            <button type="submit" id="btn-confirmar" class="btn btn-success" disabled>
-                <i class="fas fa-check"></i> Confirmar Recebimento (0 itens)
-            </button>
-        </div>
-    </div>
-</form>
 {% endblock %}
 
 {% block javascript %}
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    // --- SELETORES DOS ELEMENTOS PRINCIPAIS ---
     const scSelect = $('#sc-select');
     const form = document.getElementById('form-recebimento');
     const dynamicContent = document.getElementById('dynamic-content');
     const detalhesContent = document.getElementById('detalhes-sc-content');
     const itensList = document.getElementById('lista-itens-receber');
     const btnConfirmar = document.getElementById('btn-confirmar');
+    const infoBannerContainer = document.getElementById('info-banner-container');
+    
+    let totalItens = 0;
     
     scSelect.select2({ placeholder: "Selecione uma SC para recebimento" });
 
-    // --- CARREGA DADOS DA SC QUANDO SELECIONADA ---
     scSelect.on('change', function() {
         const solicitacaoId = this.value;
         if (!solicitacaoId) {
@@ -132,44 +209,44 @@ document.addEventListener('DOMContentLoaded', function () {
         detalhesContent.innerHTML = '<p class="text-center">Carregando detalhes...</p>';
         itensList.innerHTML = '<p class="text-center">Carregando itens...</p>';
         dynamicContent.classList.remove('d-none');
-        updateSubmitButtonState(); // Reseta o botão ao carregar nova SC
+        updateSubmitButtonState();
 
         fetch(`/api/itens-para-receber/${solicitacaoId}/`)
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    // Preenche detalhes da SC
                     detalhesContent.innerHTML = `
-                        <div class="row">
-                            <div class="col-md-3"><strong>Número:</strong> ${data.sc.numero}</div>
-                            <div class="col-md-3"><strong>Solicitante:</strong> ${data.sc.solicitante}</div>
-                            <div class="col-md-3"><strong>Obra:</strong> ${data.sc.obra}</div>
-                            <div class="col-md-3"><strong>Data:</strong> ${data.sc.data_criacao}</div>
+                        <div class="d-flex justify-content-between text-muted small p-3">
+                            <span><strong>Número:</strong> ${data.sc.numero}</span>
+                            <span><strong>Solicitante:</strong> ${data.sc.solicitante}</span>
+                            <span><strong>Obra:</strong> ${data.sc.obra}</span>
+                            <span><strong>Data:</strong> ${data.sc.data_criacao}</span>
                         </div>`;
 
-                    // Preenche lista de itens
                     let itemsHtml = '';
-                    if (data.itens.length > 0) {
+                    totalItens = data.itens.length;
+                    
+                    if (totalItens > 0) {
                         data.itens.forEach(item => {
                             itemsHtml += `
-                            <div class="card mb-2 item-row">
-                                <div class="card-body">
-                                    <div class="row align-items-center">
-                                        <div class="col-1"><input class="form-check-input item-checkbox" type="checkbox" name="itens_selecionados" value="${item.id}"></div>
-                                        <div class="col-4"><strong>${item.descricao}</strong></div>
-                                        <div class="col-2"><small class="text-muted">Pendente: ${item.quantidade_pendente}</small></div>
-                                        <div class="col-2">
-                                            <input type="number" name="quantidade_recebida_${item.id}" class="form-control form-control-sm item-quantidade" placeholder="Qtd." step="0.01" max="${item.quantidade_pendente}" min="0" disabled>
-                                        </div>
-                                        <div class="col-3"><input type="text" name="observacoes_${item.id}" class="form-control form-control-sm" placeholder="Obs. item"></div>
+                            <div class="item-card mb-2 item-row">
+                                <div class="row align-items-center">
+                                    <div class="col-auto"><input class="form-check-input item-checkbox" type="checkbox" name="itens_selecionados" value="${item.id}"></div>
+                                    <div class="col-md-5">
+                                        <strong>${item.descricao}</strong>
+                                        <div class="text-muted small">${item.quantidade_solicitada} ${item.unidade}</div>
                                     </div>
+                                    <div class="col-md-2"><small class="text-muted">Pendente: ${item.quantidade_pendente}</small></div>
+                                    <div class="col-md-2"><input type="number" name="quantidade_recebida_${item.id}" class="form-control form-control-sm item-quantidade" placeholder="Qtd." step="0.01" max="${item.quantidade_pendente}" min="0" disabled></div>
+                                    <div class="col-md-2"><div class="badge-container"></div></div>
                                 </div>
                             </div>`;
                         });
                     } else {
-                        itemsHtml = '<p class="text-center text-success"><strong><i class="fas fa-check-circle"></i> Todos os itens desta SC já foram recebidos.</strong></p>';
+                        itemsHtml = '<p class="text-center text-success p-4"><strong><i class="fas fa-check-circle"></i> Todos os itens desta SC já foram recebidos.</strong></p>';
                     }
                     itensList.innerHTML = itemsHtml;
+                    updateInfoBanner();
                 } else {
                     detalhesContent.innerHTML = '<p class="text-center text-danger">Erro ao carregar detalhes.</p>';
                     itensList.innerHTML = '<p class="text-center text-danger">Erro ao carregar itens.</p>';
@@ -177,7 +254,10 @@ document.addEventListener('DOMContentLoaded', function () {
             });
     });
 
-    // --- LÓGICA DE VALIDAÇÃO E INTERATIVIDADE ---
+    function updateInfoBanner() {
+        const count = document.querySelectorAll('.item-checkbox:checked').length;
+        infoBannerContainer.innerHTML = `<div class="info-banner">Selecione apenas os itens que foram recebidos nesta entrega. <strong>${count} de ${totalItens} itens selecionados.</strong></div>`;
+    }
 
     function updateSubmitButtonState() {
         const count = document.querySelectorAll('.item-checkbox:checked').length;
@@ -189,26 +269,30 @@ document.addEventListener('DOMContentLoaded', function () {
         if (e.target.classList.contains('item-checkbox')) {
             const itemRow = e.target.closest('.item-row');
             const quantidadeInput = itemRow.querySelector('.item-quantidade');
+            const badgeContainer = itemRow.querySelector('.badge-container');
 
             if (e.target.checked) {
+                itemRow.classList.add('selected');
                 quantidadeInput.disabled = false;
                 quantidadeInput.required = true;
+                badgeContainer.innerHTML = '<span class="badge bg-success">Selecionado</span>';
             } else {
+                itemRow.classList.remove('selected');
                 quantidadeInput.disabled = true;
                 quantidadeInput.required = false;
                 quantidadeInput.value = '';
                 quantidadeInput.classList.remove('is-invalid');
+                badgeContainer.innerHTML = '';
             }
+            updateInfoBanner();
             updateSubmitButtonState();
         }
     });
-
+    
     form.addEventListener('submit', function(event) {
         event.preventDefault();
-        
         let errors = [];
         document.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
-
         const itensChecados = document.querySelectorAll('.item-checkbox:checked');
         if (itensChecados.length === 0) {
             errors.push('Selecione pelo menos um item para registrar o recebimento.');
@@ -217,14 +301,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 const itemRow = checkbox.closest('.item-row');
                 const quantidadeInput = itemRow.querySelector('.item-quantidade');
                 const descricao = itemRow.querySelector('strong').textContent;
-                
                 if (!quantidadeInput.value || parseFloat(quantidadeInput.value) <= 0) {
                     errors.push(`- Informe uma quantidade válida para o item: "${descricao}".`);
                     quantidadeInput.classList.add('is-invalid');
                 }
             });
         }
-
         const fileInputs = form.querySelectorAll('input[type="file"][required]');
         fileInputs.forEach(input => {
             if (input.files.length === 0) {
@@ -233,44 +315,39 @@ document.addEventListener('DOMContentLoaded', function () {
                 input.closest('.upload-box').classList.add('is-invalid');
             }
         });
-
         if (errors.length > 0) {
             alert('Por favor, corrija os seguintes erros:\n\n' + errors.join('\n'));
         } else {
             form.submit();
         }
     });
-    
+
     document.getElementById('btn-selecionar-todos').addEventListener('click', () => {
-        document.querySelectorAll('.item-checkbox').forEach(cb => {
-            if (!cb.checked) {
-                cb.checked = true;
-                cb.dispatchEvent(new Event('change', { bubbles: true }));
-            }
+        document.querySelectorAll('.item-checkbox:not(:checked)').forEach(cb => {
+            cb.checked = true;
+            cb.dispatchEvent(new Event('change', { bubbles: true }));
         });
     });
 
     document.getElementById('btn-desmarcar-todos').addEventListener('click', () => {
-        document.querySelectorAll('.item-checkbox').forEach(cb => {
-            if (cb.checked) {
-                cb.checked = false;
-                cb.dispatchEvent(new Event('change', { bubbles: true }));
-            }
+        document.querySelectorAll('.item-checkbox:checked').forEach(cb => {
+            cb.checked = false;
+            cb.dispatchEvent(new Event('change', { bubbles: true }));
         });
     });
 });
 
 function updateFileName(input) {
-    const uploadBox = input.parentElement;
+    const uploadBox = input.closest('.upload-box');
     uploadBox.classList.remove('is-invalid');
     const fileNameSpan = uploadBox.querySelector('.file-name');
     const uploadTextSpan = uploadBox.querySelector('.upload-text');
     if (input.files.length > 0) {
         fileNameSpan.textContent = input.files[0].name;
-        uploadTextSpan.textContent = 'Alterar arquivo';
+        uploadTextSpan.innerHTML = '<i class="fas fa-edit"></i> Alterar arquivo';
     } else {
         fileNameSpan.textContent = '';
-        uploadTextSpan.textContent = 'Clique para anexar';
+        uploadTextSpan.innerHTML = '<i class="fas fa-upload"></i> Clique para anexar';
     }
 }
 </script>

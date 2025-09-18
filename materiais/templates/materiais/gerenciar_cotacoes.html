@@ -69,9 +69,12 @@
             </div>
         </div>
     </div>
-    {% empty %}
-    <div class="text-center p-5 text-muted"><p>Nenhuma solicitação nova para iniciar a cotação.</p></div>
-    {% endfor %}
+{% empty %}
+<div class="text-center p-5">
+    <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
+    <h5>Nenhuma solicitação nova para iniciar a cotação.</h5>
+</div>
+{% endfor %}
   </div>
   
   <div class="tab-pane fade p-3" id="em-cotacao" role="tabpanel">
@@ -99,9 +102,12 @@
             </div>
         </div>
     </div>
-    {% empty %}
-    <div class="text-center p-5 text-muted"><i class="fas fa-inbox fa-3x mb-3"></i><p>Nenhuma solicitação em cotação no momento.</p></div>
-    {% endfor %}
+{% empty %}
+<div class="text-center p-5">
+    <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
+    <h5>Nenhuma solicitação em cotação no momento.</h5>
+</div>
+{% endfor %}
   </div>
 
 <div class="tab-pane fade p-3" id="aguardando" role="tabpanel">
@@ -137,9 +143,12 @@
                     {% endfor %}
                 </div>
             </div>
-        {% empty %}
-            <div class="text-center p-4 text-muted"><i class="fas fa-check-circle fa-2x mb-2 text-success"></i><p>Nenhuma solicitação totalmente pendente.</p></div>
-        {% endfor %}
+{% empty %}
+    <div class="text-center p-5">
+        <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
+        <h5>Nenhuma solicitação aguardando resposta.</h5>
+    </div>
+{% endfor %}
     </div>
     
     <hr>
@@ -180,8 +189,11 @@
                 </div>
             </div>
         {% empty %}
-            <div class="text-center p-4 text-muted"><p>Nenhuma solicitação com recebimento parcial.</p></div>
-        {% endfor %}
+<div class="text-center p-5">
+    <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
+    <h5>Nenhuma solicitação com recebimento parcial.</h5>
+</div>
+{% endfor %}
     </div>
 
 </div>
@@ -236,9 +248,12 @@
             {% endfor %}
         </div>
     </div>
-    {% empty %}
-    <div class="text-center p-5 text-muted"><i class="fas fa-inbox fa-3x mb-3"></i><p>Nenhuma cotação recebida ou selecionada ainda.</p></div>
-    {% endfor %}
+{% empty %}
+<div class="text-center p-5">
+    <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
+    <h5>Nenhuma cotação recebida ou pronta para análise.</h5>
+</div>
+{% endfor %}
   </div>
 
 </div>

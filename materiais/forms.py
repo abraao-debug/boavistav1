@@ -1,5 +1,15 @@
 from django import forms
-from .models import SolicitacaoCompra, ItemSolicitacao, Obra, ItemCatalogo
+from .models import SolicitacaoCompra, ItemSolicitacao, Obra, ItemCatalogo, Fornecedor
+
+class FornecedorForm(forms.ModelForm):
+    class Meta:
+        model = Fornecedor
+        fields = '__all__' # Ou liste os campos que você quer no formulário
+        widgets = { # Adicione classes do Bootstrap para estilização
+            'nome_fantasia': forms.TextInput(attrs={'class': 'form-control'}),
+            'razao_social': forms.TextInput(attrs={'class': 'form-control'}),
+            # ... outros campos
+        }
 
 class SolicitacaoCompraForm(forms.ModelForm):
     class Meta:
