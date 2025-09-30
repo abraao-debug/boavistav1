@@ -208,6 +208,13 @@
 
 {% block javascript %}
 <script>
+// CORREÇÃO: Definir URLs dinamicamente no Django usando um placeholder (0)
+const URL_APROVAR = "{% url 'materiais:aprovar_solicitacao' 0 %}";
+const URL_REJEITAR = "{% url 'materiais:rejeitar_solicitacao' 0 %}";
+const URL_APROVAR_PARCIAL = "{% url 'materiais:aprovar_parcial' 0 %}";
+const URL_ITENS_API = "{% url 'materiais:api_solicitacao_itens' 0 %}";
+
+
 document.addEventListener('DOMContentLoaded', function() {
     let solicitacaoIdAtual = null;
 
@@ -234,7 +241,8 @@ document.addEventListener('DOMContentLoaded', function() {
     
     window.abrirModalAprovacaoParcial = function(id) {
         solicitacaoIdAtual = id;
-        fetch(`/api/solicitacao-itens/${id}/`)
+        // CORREÇÃO: Usar a URL dinâmica para a API de itens
+        fetch(URL_ITENS_API.replace('0', id))
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
@@ -291,14 +299,40 @@ document.addEventListener('DOMContentLoaded', function() {
     // --- Lógicas de Fetch para os botões de confirmação ---
     document.getElementById('btnConfirmarAprovacao').addEventListener('click', function() {
         this.disabled = true; this.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Aprovando...';
-        fetch(`/aprovar-solicitacao/${solicitacaoIdAtual}/`, { method: 'POST', headers: { 'X-CSRFToken': getCookie('csrftoken') }, }).then(r => r.json()).then(d => { if (d.success) { location.reload(); } else { alert('Erro: ' + d.message); this.disabled = false; this.innerHTML = 'Sim, Aprovar'; }});
+        // CORREÇÃO: Usar a URL dinâmica
+        const url = URL_APROVAR.replace('0', solicitacaoIdAtual);
+        
+        fetch(url, { 
+            method: 'POST', 
+            headers: { 'X-CSRFToken': getCookie('csrftoken') }, 
+        }).then(r => r.json()).then(d => { 
+            if (d.success) { location.reload(); } 
+            else { alert('Erro: ' + d.message); this.disabled = false; this.innerHTML = 'Sim, Aprovar'; }
+        });
     });
 
     document.getElementById('btnConfirmarRejeicao').addEventListener('click', function() {
-        const motivoInput = document.getElementById('rejeitarMotivo'); if (!motivoInput.value.trim()) { motivoInput.classList.add('is-invalid'); return; }
+        const motivoInput = document.getElementById('rejeitarMotivo'); 
+        if (!motivoInput.value.trim()) { 
+            motivoInput.classList.add('is-invalid'); 
+            return; 
+        }
         this.disabled = true; this.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Rejeitando...';
-        const formData = new FormData(); formData.append('observacoes', motivoInput.value.trim());
-        fetch(`/rejeitar-solicitacao/${solicitacaoIdAtual}/`, { method: 'POST', headers: { 'X-CSRFToken': getCookie('csrftoken') }, body: formData }).then(r => r.json()).then(d => { if (d.success) { location.reload(); } else { alert('Erro: ' + d.message); this.disabled = false; this.innerHTML = 'Sim, Rejeitar'; }});
+        
+        const formData = new FormData(); 
+        formData.append('observacoes', motivoInput.value.trim());
+        
+        // CORREÇÃO: Usar a URL dinâmica
+        const url = URL_REJEITAR.replace('0', solicitacaoIdAtual);
+
+        fetch(url, { 
+            method: 'POST', 
+            headers: { 'X-CSRFToken': getCookie('csrftoken') }, 
+            body: formData 
+        }).then(r => r.json()).then(d => { 
+            if (d.success) { location.reload(); } 
+            else { alert('Erro: ' + d.message); this.disabled = false; this.innerHTML = 'Sim, Rejeitar'; }
+        });
     });
 
     document.getElementById('btnConfirmarAprovacaoParcial').addEventListener('click', function() {
@@ -313,8 +347,11 @@ document.addEventListener('DOMContentLoaded', function() {
         const button = this;
         button.disabled = true;
         button.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Confirmando...';
+        
+        // CORREÇÃO: Usar a URL dinâmica
+        const url = URL_APROVAR_PARCIAL.replace('0', solicitacaoIdAtual);
 
-        fetch(`/aprovar-parcial/${solicitacaoIdAtual}/`, {
+        fetch(url, {
             method: 'POST',
             headers: { 'X-CSRFToken': getCookie('csrftoken') },
             body: formData
@@ -324,7 +361,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 alert('Erro: ' + data.message);
                 button.disabled = false;
                 button.innerHTML = 'Confirmar Aprovação dos Itens Selecionados';
-            }<div class="text-center p-5 text-muted"><p>Nenhuma RM pendente de primeira assinatura.</p></div>
+            }
         });
     });
 });
