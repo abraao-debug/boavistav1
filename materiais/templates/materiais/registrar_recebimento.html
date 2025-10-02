@@ -132,31 +132,31 @@
                     </div>
                     
                     <div class="card">
-                        <div class="card-header"><h5 class="mb-0">Documentos Obrigatórios</h5></div>
+                        <div class="card-header"><h5 class="mb-0">Documentos (Opcional)</h5></div>
                         <div class="card-body">
                             <div class="row">
                                 <div class="col-md-4 mb-3">
-                                    <label class="form-label">Nota Fiscal *</label>
+                                    <label class="form-label">Nota Fiscal</label>
                                     <div class="upload-box" onclick="this.querySelector('input').click()">
-                                        <input type="file" name="nota_fiscal" class="d-none" required onchange="updateFileName(this)" accept="image/*,application/pdf">
+                                        <input type="file" name="nota_fiscal" class="d-none" onchange="updateFileName(this)" accept="image/*,application/pdf">
                                         <p><i class="fas fa-upload fa-2x text-muted"></i></p>
                                         <p class="upload-text">Clique para anexar a nota fiscal</p>
                                         <span class="file-name"></span>
                                     </div>
                                 </div>
                                 <div class="col-md-4 mb-3">
-                                    <label class="form-label">SC Assinada *</label>
+                                    <label class="form-label">SC Assinada</label>
                                     <div class="upload-box" onclick="this.querySelector('input').click()">
-                                        <input type="file" name="sc_assinada" class="d-none" required onchange="updateFileName(this)" accept="image/*,application/pdf">
+                                        <input type="file" name="sc_assinada" class="d-none" onchange="updateFileName(this)" accept="image/*,application/pdf">
                                         <p><i class="fas fa-upload fa-2x text-muted"></i></p>
                                         <p class="upload-text">Clique para anexar a SC assinada</p>
                                         <span class="file-name"></span>
                                     </div>
                                 </div>
                                 <div class="col-md-4 mb-3">
-                                    <label class="form-label">Boleto/Comprovante *</label>
+                                    <label class="form-label">Boleto/Comprovante</label>
                                     <div class="upload-box" onclick="this.querySelector('input').click()">
-                                        <input type="file" name="boleto_comprovante" class="d-none" required onchange="updateFileName(this)" accept="image/*,application/pdf">
+                                        <input type="file" name="boleto_comprovante" class="d-none" onchange="updateFileName(this)" accept="image/*,application/pdf">
                                         <p><i class="fas fa-upload fa-2x text-muted"></i></p>
                                         <p class="upload-text">Clique para anexar o boleto</p>
                                         <span class="file-name"></span>
@@ -307,14 +307,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
             });
         }
-        const fileInputs = form.querySelectorAll('input[type="file"][required]');
-        fileInputs.forEach(input => {
-            if (input.files.length === 0) {
-                const label = input.closest('.col-md-4').querySelector('label').textContent;
-                errors.push(`- O anexo "${label}" é obrigatório.`);
-                input.closest('.upload-box').classList.add('is-invalid');
-            }
-        });
+        
+        // --- VALIDAÇÃO DE ARQUIVOS REMOVIDA DAQUI ---
+        
         if (errors.length > 0) {
             alert('Por favor, corrija os seguintes erros:\n\n' + errors.join('\n'));
         } else {

@@ -638,16 +638,18 @@ def historico_recebimentos(request):
 
 @login_required
 def cadastrar_itens(request):
-    # PERMISSÃO CORRIGIDA PARA INCLUIR O DIRETOR
     if request.user.perfil not in ['almoxarife_escritorio', 'diretor']:
         messages.error(request, 'Acesso negado. Apenas o escritório ou diretoria pode cadastrar itens.')
         return redirect('materiais:dashboard')
 
-    categorias_principais_list = CategoriaItem.objects.filter(categoria_mae__isnull=True).order_by('nome')
+    # AJUSTE: Filtra apenas categorias principais que TÊM subcategorias
+    categorias_principais_list = CategoriaItem.objects.filter(categoria_mae__isnull=True, subcategorias__isnull=False).distinct().order_by('nome')
+    
     unidades_list = UnidadeMedida.objects.all().order_by('nome')
     tags_list = Tag.objects.all().order_by('nome')
 
     if request.method == 'POST':
+        # ... (o resto da lógica POST permanece igual) ...
         subcategoria_id = request.POST.get('subcategoria')
         descricao = request.POST.get('descricao')
         unidade_id = request.POST.get('unidade')
@@ -759,18 +761,13 @@ def gerenciar_fornecedores(request):
 
     if request.method == 'POST':
         cnpj = request.POST.get('cnpj')
-        
-        # --- CORREÇÃO CRÍTICA DO VALUERROR ---
         produtos_ids_string = request.POST.get('produtos_fornecidos', '')
-        # Garante que seja uma lista de IDs válidos (strings ou vazia)
         produtos_ids = [pid.strip() for pid in produtos_ids_string.split(',') if pid.strip()]
-        # --- FIM DA CORREÇÃO CRÍTICA DO VALUERROR ---
-        
+
         if Fornecedor.objects.filter(cnpj=cnpj).exists():
             messages.error(request, f'❌ CNPJ {cnpj} já cadastrado!')
         else:
             try:
-                # O restante da lógica de criação de fornecedor
                 novo_fornecedor = Fornecedor.objects.create(
                     nome_fantasia=request.POST.get('nome_fantasia'),
                     razao_social=request.POST.get('razao_social'),
@@ -785,32 +782,27 @@ def gerenciar_fornecedores(request):
                     numero=request.POST.get('numero'),
                     bairro=request.POST.get('bairro'),
                     cidade=request.POST.get('cidade'),
-                    estado=request.POST.get('estado'),
+                    estado=(request.POST.get('estado') or '').upper(),
                     ativo=True
                 )
-                
-                # Associa as categorias/subcategorias
+
                 if produtos_ids:
-                    novo_fornecedor.produtos_fornecidos.set(produtos_ids)
-                else:
-                    # Se a lista estiver vazia, .clear() evita o ValueError e desvincula.
-                    novo_fornecedor.produtos_fornecidos.clear()
+                    categorias = CategoriaItem.objects.filter(id__in=produtos_ids)
+                    if categorias.count() != len(produtos_ids):
+                        messages.warning(request, 'Algumas categorias selecionadas não foram encontradas.')
+                    novo_fornecedor.produtos_fornecidos.set(categorias)
 
                 messages.success(request, f'✅ Fornecedor {novo_fornecedor.nome_fantasia} cadastrado com sucesso!')
                 return redirect('materiais:gerenciar_fornecedores')
             except Exception as e:
                 messages.error(request, f'Ocorreu um erro ao cadastrar: {e}')
 
-
     context = {
         'fornecedores': Fornecedor.objects.all().order_by('nome_fantasia'),
-        # Passando as categorias principais para o template (necessário para a cascata)
+        # apenas categorias principais, como você já fazia
         'categorias_principais': CategoriaItem.objects.filter(categoria_mae__isnull=True).order_by('nome')
     }
     return render(request, 'materiais/gerenciar_fornecedores.html', context)
-
-
-
 @login_required
 def finalizar_compra(request, solicitacao_id):
     if request.user.perfil != 'almoxarife_escritorio':
@@ -1298,40 +1290,45 @@ def api_solicitacao_detalhes(request, solicitacao_id):
 # Adicione esta nova função ao seu arquivo materiais/views.py cadastrar_itens
 @login_required
 def gerenciar_categorias(request):
-    # PERMISSÃO CORRIGIDA PARA INCLUIR O DIRETOR
     if request.user.perfil not in ['almoxarife_escritorio', 'diretor']:
         messages.error(request, 'Acesso negado.')
         return redirect('materiais:dashboard')
 
     if request.method == 'POST':
         form_type = request.POST.get('form_type')
-        nome_categoria = request.POST.get('nome')
+        nome = request.POST.get('nome')
 
-        if nome_categoria:
-            if form_type == 'categoria_item':
-                if not CategoriaItem.objects.filter(nome__iexact=nome_categoria).exists():
-                    CategoriaItem.objects.create(nome=nome_categoria)
-                    messages.success(request, f'Categoria de Item "{nome_categoria}" cadastrada!')
-                else:
-                    messages.error(request, 'Essa Categoria de Item já existe.')
-            
-            elif form_type == 'categoria_sc':
-                if not CategoriaSC.objects.filter(nome__iexact=nome_categoria).exists():
-                    CategoriaSC.objects.create(nome=nome_categoria)
-                    messages.success(request, f'Categoria de SC "{nome_categoria}" cadastrada!')
-                else:
-                    messages.error(request, 'Essa Categoria de SC já existe.')
-        else:
+        if not nome:
             messages.error(request, 'O nome da categoria não pode ser vazio.')
+            return redirect('materiais:gerenciar_categorias')
+
+        # Lógica para criar Categoria de Item (Principal ou Subcategoria)
+        if form_type == 'categoria_item':
+            categoria_mae_id = request.POST.get('categoria_mae') # Pode ser None ou um ID
+            
+            query = CategoriaItem.objects.filter(nome__iexact=nome, categoria_mae_id=categoria_mae_id)
+            if query.exists():
+                messages.error(request, 'Uma categoria com este nome e nesta mesma hierarquia já existe.')
+            else:
+                CategoriaItem.objects.create(nome=nome, categoria_mae_id=categoria_mae_id)
+                messages.success(request, f'Categoria de Item "{nome}" cadastrada com sucesso!')
+
+        # Lógica para criar Categoria de SC
+        elif form_type == 'categoria_sc':
+            if not CategoriaSC.objects.filter(nome__iexact=nome).exists():
+                CategoriaSC.objects.create(nome=nome)
+                messages.success(request, f'Categoria de SC "{nome}" cadastrada!')
+            else:
+                messages.error(request, 'Essa Categoria de SC já existe.')
+        
         return redirect('materiais:gerenciar_categorias')
 
     context = {
-        'categorias_item': CategoriaItem.objects.all().order_by('nome'),
+        'categorias_principais': CategoriaItem.objects.filter(categoria_mae__isnull=True).prefetch_related('subcategorias').order_by('nome'),
         'categorias_sc': CategoriaSC.objects.all().order_by('nome')
     }
     return render(request, 'materiais/gerenciar_categorias.html', context)
 
-# Adicione esta nova função ao final de materiais/views.py
 
 @login_required
 def historico_aprovacoes(request):
@@ -1935,11 +1932,12 @@ def api_get_itens_para_receber(request, solicitacao_id):
 
 @login_required
 def registrar_recebimento(request):
-    if request.user.perfil != 'almoxarife_obra':
-        messages.error(request, 'Acesso negado.')
-        return redirect('materiais:dashboard')
-
+    # Lógica para processar o formulário de recebimento (POST)
     if request.method == 'POST':
+        if request.user.perfil != 'almoxarife_obra':
+            messages.error(request, 'Acesso negado.')
+            return redirect('materiais:dashboard')
+        
         try:
             with transaction.atomic():
                 solicitacao_id = request.POST.get('solicitacao_id')
@@ -1967,11 +1965,11 @@ def registrar_recebimento(request):
                             observacoes=request.POST.get(f'observacoes_{item_id}', '')
                         )
 
-                # 3. VERIFICA O STATUS GERAL DA SC (LÓGICA CORRIGIDA)
+                # 3. VERIFICA O STATUS GERAL DA SC (LÓGICA CORRIGIDA E ROBUSTA)
                 total_itens_sc = sc.itens.count()
                 itens_completos = 0
                 for item_solicitado in sc.itens.all():
-                    # Soma tudo que já foi recebido para este item em todos os recebimentos
+                    # Soma tudo que já foi recebido para este item em TODOS os recebimentos
                     total_recebido_do_item = item_solicitado.recebimentos.aggregate(
                         total=Sum('quantidade_recebida')
                     )['total'] or 0
@@ -1996,20 +1994,42 @@ def registrar_recebimento(request):
                 )
                 
                 messages.success(request, f'Recebimento da SC {sc.numero} registrado com sucesso!')
-                return redirect('materiais:dashboard')
+                return redirect('materiais:registrar_recebimento')
 
         except Exception as e:
             messages.error(request, f'Ocorreu um erro ao registrar o recebimento: {e}')
     
-    # Lógica para GET (carregar a página)
+    # Lógica para exibir a página/dashboard de recebimentos (GET)
+    if request.user.perfil != 'almoxarife_obra':
+        messages.error(request, 'Acesso negado.')
+        return redirect('materiais:dashboard')
+        
     user_obras = request.user.obras.all()
+    
+    # Lista de SCs aguardando a primeira entrega
     scs_a_receber = SolicitacaoCompra.objects.filter(
         obra__in=user_obras,
-        status__in=['a_caminho', 'recebida_parcial'] # Agora também busca as parciais
+        status='a_caminho'
     ).order_by('data_criacao')
     
+    # Lista de SCs com entregas parciais
+    scs_parciais = SolicitacaoCompra.objects.filter(
+        obra__in=user_obras,
+        status='recebida_parcial'
+    ).order_by('data_criacao')
+
+    # Adiciona informações de progresso para as SCs parciais
+    for sc in scs_parciais:
+        sc.total_itens = sc.itens.count()
+        sc.itens_completos = 0
+        for item in sc.itens.all():
+            total_recebido = item.recebimentos.aggregate(total=Sum('quantidade_recebida'))['total'] or 0
+            if total_recebido >= item.quantidade:
+                sc.itens_completos += 1
+
     context = {
-        'scs_a_receber': scs_a_receber
+        'scs_a_receber': scs_a_receber,
+        'scs_parciais': scs_parciais,
     }
     return render(request, 'materiais/registrar_recebimento.html', context)
 
@@ -2137,3 +2157,35 @@ def alterar_status_fornecedor(request, fornecedor_id):
             return JsonResponse({'success': False, 'message': str(e)})
 
     return JsonResponse({'success': False, 'message': 'Método não permitido.'})
+
+@login_required
+def excluir_categoria_item(request, categoria_id):
+    if request.method == 'POST':
+        if request.user.perfil not in ['almoxarife_escritorio', 'diretor']:
+            messages.error(request, 'Acesso negado.')
+            return redirect('materiais:dashboard')
+
+        categoria = get_object_or_404(CategoriaItem, id=categoria_id)
+
+        try:
+            # Se for uma categoria principal (não tem pai)
+            if categoria.categoria_mae is None:
+                if categoria.subcategorias.exists():
+                    messages.error(request, f'Não é possível excluir a categoria principal "{categoria.nome}", pois ela contém subcategorias.')
+                else:
+                    nome_categoria = categoria.nome
+                    categoria.delete()
+                    messages.success(request, f'Categoria principal "{nome_categoria}" excluída com sucesso.')
+            # Se for uma subcategoria
+            else:
+                if ItemCatalogo.objects.filter(categoria=categoria).exists():
+                    messages.error(request, f'Não é possível excluir a subcategoria "{categoria.nome}", pois ela está associada a itens do catálogo.')
+                else:
+                    nome_categoria = categoria.nome
+                    categoria.delete()
+                    messages.success(request, f'Subcategoria "{nome_categoria}" excluída com sucesso.')
+        
+        except Exception as e:
+            messages.error(request, f"Ocorreu um erro ao tentar excluir: {e}")
+
+    return redirect('materiais:gerenciar_categorias')
