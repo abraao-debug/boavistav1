@@ -753,45 +753,62 @@ def cadastrar_obras(request):
 
 @login_required
 def gerenciar_fornecedores(request):
-    # PERMISSÃO CORRIGIDA PARA INCLUIR O DIRETOR
     if request.user.perfil not in ['almoxarife_escritorio', 'diretor']:
         messages.error(request, 'Acesso negado.')
         return redirect('materiais:dashboard')
 
     if request.method == 'POST':
         cnpj = request.POST.get('cnpj')
+        
+        # --- CORREÇÃO CRÍTICA DO VALUERROR ---
+        produtos_ids_string = request.POST.get('produtos_fornecidos', '')
+        # Garante que seja uma lista de IDs válidos (strings ou vazia)
+        produtos_ids = [pid.strip() for pid in produtos_ids_string.split(',') if pid.strip()]
+        # --- FIM DA CORREÇÃO CRÍTICA DO VALUERROR ---
+        
         if Fornecedor.objects.filter(cnpj=cnpj).exists():
             messages.error(request, f'❌ CNPJ {cnpj} já cadastrado!')
         else:
-            novo_fornecedor = Fornecedor.objects.create(
-                nome_fantasia=request.POST.get('nome_fantasia'),
-                razao_social=request.POST.get('razao_social'),
-                cnpj=cnpj,
-                tipo=request.POST.get('tipo'),
-                email=request.POST.get('email'),
-                contato_nome=request.POST.get('contato_nome'),
-                contato_telefone=request.POST.get('contato_telefone'),
-                contato_whatsapp=request.POST.get('contato_whatsapp'),
-                cep=request.POST.get('cep'),
-                logradouro=request.POST.get('logradouro'),
-                numero=request.POST.get('numero'),
-                bairro=request.POST.get('bairro'),
-                cidade=request.POST.get('cidade'),
-                estado=request.POST.get('estado'),
-                ativo=True
-            )
-            produtos_ids = request.POST.getlist('produtos_fornecidos')
-            if produtos_ids:
-                novo_fornecedor.produtos_fornecidos.set(produtos_ids)
-            
-            messages.success(request, f'✅ Fornecedor {novo_fornecedor.nome_fantasia} cadastrado com sucesso!')
-            return redirect('materiais:gerenciar_fornecedores')
+            try:
+                # O restante da lógica de criação de fornecedor
+                novo_fornecedor = Fornecedor.objects.create(
+                    nome_fantasia=request.POST.get('nome_fantasia'),
+                    razao_social=request.POST.get('razao_social'),
+                    cnpj=cnpj,
+                    tipo=request.POST.get('tipo'),
+                    email=request.POST.get('email'),
+                    contato_nome=request.POST.get('contato_nome'),
+                    contato_telefone=request.POST.get('contato_telefone'),
+                    contato_whatsapp=request.POST.get('contato_whatsapp'),
+                    cep=request.POST.get('cep'),
+                    logradouro=request.POST.get('logradouro'),
+                    numero=request.POST.get('numero'),
+                    bairro=request.POST.get('bairro'),
+                    cidade=request.POST.get('cidade'),
+                    estado=request.POST.get('estado'),
+                    ativo=True
+                )
+                
+                # Associa as categorias/subcategorias
+                if produtos_ids:
+                    novo_fornecedor.produtos_fornecidos.set(produtos_ids)
+                else:
+                    # Se a lista estiver vazia, .clear() evita o ValueError e desvincula.
+                    novo_fornecedor.produtos_fornecidos.clear()
+
+                messages.success(request, f'✅ Fornecedor {novo_fornecedor.nome_fantasia} cadastrado com sucesso!')
+                return redirect('materiais:gerenciar_fornecedores')
+            except Exception as e:
+                messages.error(request, f'Ocorreu um erro ao cadastrar: {e}')
+
 
     context = {
         'fornecedores': Fornecedor.objects.all().order_by('nome_fantasia'),
-        'subcategorias': CategoriaItem.objects.filter(categoria_mae__isnull=False).order_by('nome')
+        # Passando as categorias principais para o template (necessário para a cascata)
+        'categorias_principais': CategoriaItem.objects.filter(categoria_mae__isnull=True).order_by('nome')
     }
     return render(request, 'materiais/gerenciar_fornecedores.html', context)
+
 
 
 @login_required
@@ -2080,3 +2097,43 @@ def editar_solicitacao_analise(request, solicitacao_id):
     # *** PONTO CHAVE DA REUTILIZAÇÃO ***
     # Nós renderizamos o mesmo template que o escritório usa!
     return render(request, 'materiais/editar_solicitacao.html', context)
+
+@login_required
+def editar_fornecedor(request, fornecedor_id):
+    if request.user.perfil not in ['almoxarife_escritorio', 'diretor']:
+        messages.error(request, 'Acesso negado.')
+        return redirect('materiais:dashboard')
+    
+    fornecedor = get_object_or_404(Fornecedor, id=fornecedor_id)
+    # A lógica de POST/edição ficaria aqui, mas por enquanto retorna um placeholder simples.
+    
+    messages.info(request, f'Funcionalidade de edição para {fornecedor.nome_fantasia} em desenvolvimento.')
+    return redirect('materiais:gerenciar_fornecedores')
+
+
+# Nova View para Alteração de Status (ativar/inativar via AJAX)
+@login_required
+@csrf_exempt # Permite o POST simples via AJAX/fetch
+def alterar_status_fornecedor(request, fornecedor_id):
+    if request.user.perfil not in ['almoxarife_escritorio', 'diretor']:
+        return JsonResponse({'success': False, 'message': 'Acesso negado.'}, status=403)
+        
+    if request.method == 'POST':
+        fornecedor = get_object_or_404(Fornecedor, id=fornecedor_id)
+        novo_status_str = request.POST.get('ativo', 'false')
+        
+        # Converte a string 'true'/'false' em booleano
+        novo_status = novo_status_str == 'true'
+
+        try:
+            fornecedor.ativo = novo_status
+            fornecedor.save()
+            
+            acao = "Ativado" if novo_status else "Inativado"
+            messages.success(request, f'Fornecedor {fornecedor.nome_fantasia} {acao} com sucesso!')
+            return JsonResponse({'success': True})
+        
+        except Exception as e:
+            return JsonResponse({'success': False, 'message': str(e)})
+
+    return JsonResponse({'success': False, 'message': 'Método não permitido.'})

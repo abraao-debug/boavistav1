@@ -73,6 +73,10 @@ urlpatterns = [
     path('gerenciar-fornecedores/', views.gerenciar_fornecedores, name='gerenciar_fornecedores'),
     path('gerenciar-categorias/', views.gerenciar_categorias, name='gerenciar_categorias'),
     
+    # CORREÇÃO CRÍTICA: Novas Rotas de Gerenciamento de Fornecedores
+    path('fornecedor/<int:fornecedor_id>/editar/', views.editar_fornecedor, name='editar_fornecedor'),
+    path('fornecedor/<int:fornecedor_id>/status/', views.alterar_status_fornecedor, name='alterar_status_fornecedor'),
+    
     # Relatórios
     path('dashboard/relatorios/', views.dashboard_relatorios, name='dashboard_relatorios'),
     path('api/subcategorias/<int:categoria_id>/', views.api_subcategorias, name='api_subcategorias'),

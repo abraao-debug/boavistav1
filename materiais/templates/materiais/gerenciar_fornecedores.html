@@ -3,21 +3,23 @@
 
 {% block content %}
 <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.14.16/jquery.mask.min.js"></script>
 
-<div class="row">
-    <div class="col-12">
-        <h2><i class="fas fa-truck"></i> Gerenciar Fornecedores</h2>
-        <p class="text-muted">Cadastrar e gerenciar fornecedores</p>
-        <hr>
+<div class="d-flex align-items-center mb-3">
+    <a href="{% url 'materiais:dashboard' %}" class="btn btn-secondary me-3"><i class="fas fa-arrow-left"></i> Voltar</a>
+    <div>
+        <h4 class="mb-0">Gerenciar Fornecedores</h4>
+        <p class="text-muted mb-0">Cadastrar e gerenciar fornecedores</p>
     </div>
 </div>
+<hr class="mb-4">
 
 <div class="card mb-4">
     <div class="card-header">
         <h5><i class="fas fa-plus-circle"></i> Novo Fornecedor</h5>
     </div>
     <div class="card-body">
-        <form method="post">
+        <form method="post" id="formFornecedor">
             {% csrf_token %}
             <h6><i class="fas fa-building"></i> Dados da Empresa</h6><hr>
             <div class="row">
@@ -34,11 +36,40 @@
                         <option value="ambos">Ambos</option>
                     </select>
                 </div>
+                
                 <div class="col-md-8 mb-3">
-                    <label for="produtos_fornecidos" class="form-label">Produtos/Serviços Fornecidos</label>
-                    <select class="form-select" id="produtos_fornecidos" name="produtos_fornecidos" multiple>
-                        {% for subcat in subcategorias %}<option value="{{ subcat.id }}">{{ subcat }}</option>{% endfor %}
-                    </select>
+                    <label class="form-label">Adicionar Categoria/Serviço</label>
+                    <div class="row g-2">
+                        <div class="col-md-6">
+                            <select class="form-select" id="categoria_principal_select">
+                                <option value="" selected>Selecione a Categoria Principal...</option>
+                                {% for cat in categorias_principais %}
+                                    <option value="{{ cat.id }}">{{ cat.nome }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="input-group">
+                                <select class="form-select" id="subcategoria_select" disabled>
+                                    <option value="">Aguardando Categoria...</option>
+                                </select>
+                                <button class="btn btn-primary" type="button" id="adicionar_produto_btn" disabled title="Adicionar Subcategoria">
+                                    <i class="fas fa-plus"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-4"></div>
+                <div class="col-md-8 mb-3">
+                    <label class="form-label">Produtos/Serviços Fornecidos (Selecionados)</label>
+                    <div id="produtos_selecionados_container" class="border p-2 rounded bg-light" style="min-height: 45px;">
+                        <span class="text-muted" id="placeholder_produtos">Nenhuma categoria/serviço adicionado.</span>
+                    </div>
+                    <input type="hidden" name="produtos_fornecidos" id="produtos_fornecidos_hidden">
                 </div>
             </div>
 
@@ -70,6 +101,7 @@
 <div class="card">
     <div class="card-header"><h5><i class="fas fa-list"></i> Fornecedores Cadastrados ({{ fornecedores.count }})</h5></div>
     <div class="card-body">
+        <form id="formToggleStatus" method="post" style="display:none;">{% csrf_token %}<input type="hidden" name="ativo" id="status_toggle_field"></form>
         {% if fornecedores %}
             <div class="table-responsive">
                 <table class="table table-striped">
@@ -92,8 +124,13 @@
                             <td>{{ fornecedor.get_tipo_display }}</td>
                             <td>{% if fornecedor.ativo %}<span class="badge bg-success">Ativo</span>{% else %}<span class="badge bg-danger">Inativo</span>{% endif %}</td>
                             <td>
-                                <button class="btn btn-sm btn-outline-primary"><i class="fas fa-edit"></i></button>
-                                <button class="btn btn-sm btn-outline-warning"><i class="fas fa-pause"></i></button>
+                                <a href="{% url 'materiais:editar_fornecedor' fornecedor.id %}" class="btn btn-sm btn-outline-primary" title="Editar"><i class="fas fa-edit"></i></a>
+                                <button type="button" class="btn btn-sm {% if fornecedor.ativo %}btn-outline-warning{% else %}btn-outline-success{% endif %} toggle-status-btn"
+                                        data-fornecedor-id="{{ fornecedor.id }}"
+                                        data-status="{% if fornecedor.ativo %}false{% else %}true{% endif %}"
+                                        title="{% if fornecedor.ativo %}Pausar (Inativar){% else %}Ativar{% endif %}">
+                                    <i class="fas {% if fornecedor.ativo %}fa-pause{% else %}fa-play{% endif %}"></i>
+                                </button>
                             </td>
                         </tr>
                         {% endfor %}
@@ -105,17 +142,189 @@
         {% endif %}
     </div>
 </div>
-
-<a href="{% url 'materiais:dashboard' %}" class="btn btn-secondary mt-3"><i class="fas fa-arrow-left"></i> Voltar ao Dashboard</a>
 {% endblock %}
 
 {% block javascript %}
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
+// URLs dinâmicas necessárias
+const URL_SUBCATEGORIAS = "{% url 'materiais:api_subcategorias' 0 %}";
+const URL_ALTERAR_STATUS = "{% url 'materiais:alterar_status_fornecedor' 0 %}";
+
 $(document).ready(function() {
-    $('#produtos_fornecidos').select2({
-        placeholder: "Selecione as categorias que este fornecedor atende..."
+    // --- FUNÇÃO PARA PEGAR O TOKEN CSRF ---
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    // --- LÓGICA DE MÁSCARAS (CORREÇÃO DE FUNCIONAMENTO IMEDIATO) ---
+    // CNPJ: Garante a formatação ao digitar (CORRIGIDO)
+    $('#cnpj').mask('00.000.000/0000-00', {reverse: true});
+    $('#cep').mask('00000-000');
+    
+    // Máscara para telefone com 8 ou 9 dígitos (com DDD)
+    var SPMaskBehavior = function (val) {
+      return val.replace(/\D/g, '').length === 11 ? '(00) 00000-0000' : '(00) 0000-00009';
+    },
+    spOptions = {
+      onKeyPress: function(val, e, field, options) {
+          field.mask(SPMaskBehavior.apply({}, arguments), options);
+        }
+    };
+    $('#contato_telefone').mask(SPMaskBehavior, spOptions);
+    $('#contato_whatsapp').mask(SPMaskBehavior, spOptions);
+
+
+    // --- LÓGICA HIERÁRQUICA E DE TAGS ---
+    let produtosSelecionados = [];
+    
+    // Inicializar Select2 para os novos campos
+    $('#categoria_principal_select').select2({ dropdownParent: $('#formFornecedor'), placeholder: "Selecione a categoria..." });
+    $('#subcategoria_select').select2({ dropdownParent: $('#formFornecedor'), placeholder: "Aguardando categoria..." });
+
+    // 1. CARREGAMENTO EM CASCATA DA SUBCATEGORIA (CORREÇÃO DO BUG 'AGUARDANDO...')
+    $('#categoria_principal_select').on('change', function() {
+        const categoriaId = $(this).val();
+        const subcategoriaSelect = $('#subcategoria_select');
+        const adicionarBtn = $('#adicionar_produto_btn');
+
+        // Reseta e desabilita
+        subcategoriaSelect.empty().prop('disabled', true).val(null).trigger('change');
+        adicionarBtn.prop('disabled', true);
+
+        if (!categoriaId) {
+            // AJUSTE PARA EXIBIR A MENSAGEM CORRETA DE PLACEHOLDER
+            subcategoriaSelect.empty().append('<option value="">Aguardando Categoria...</option>').trigger('change');
+            return;
+        }
+
+        subcategoriaSelect.empty().append('<option value="">Carregando...</option>').trigger('change');
+        
+        // CORREÇÃO DO BUG 'AGUARDANDO...': Usa URL_SUBCATEGORIAS para o fetch
+        fetch(URL_SUBCATEGORIAS.replace('0', categoriaId))
+            .then(response => response.json())
+            .then(data => {
+                subcategoriaSelect.empty().append('<option value="">Selecione a subcategoria...</option>');
+                $.each(data, function(i, sub) {
+                    subcategoriaSelect.append(new Option(sub.nome, sub.id));
+                });
+                subcategoriaSelect.prop('disabled', false).trigger('change');
+            })
+            .catch(error => {
+                console.error('Erro ao buscar subcategorias:', error);
+                subcategoriaSelect.empty().append('<option value="">Erro ao carregar</option>').prop('disabled', true).trigger('change');
+            });
     });
+
+    // 2. HABILITAR BOTÃO QUANDO HOUVER SELEÇÃO
+    $('#subcategoria_select').on('change', function() {
+        const subcategoriaId = $(this).val();
+        const adicionarBtn = $('#adicionar_produto_btn');
+        adicionarBtn.prop('disabled', !subcategoriaId);
+    });
+
+    // 3. ADICIONAR ITEM NA LISTA E NO CAMPO HIDDEN
+    $('#adicionar_produto_btn').on('click', function() {
+        const subcategoriaSelect = $('#subcategoria_select');
+        const subcategoriaId = subcategoriaSelect.val();
+        const subcategoriaTexto = subcategoriaSelect.find('option:selected').text();
+        const categoriaTexto = $('#categoria_principal_select').find('option:selected').text();
+        const itemId = subcategoriaId;
+
+        // Valida se o item já não foi adicionado
+        if (itemId && !produtosSelecionados.some(item => item.id === itemId)) {
+            // Cria o nome completo no formato Categoria -> Subcategoria
+            const nomeCompleto = categoriaTexto.includes('Selecione') 
+                ? 'Geral' + ' -> ' + subcategoriaTexto // Usa 'Geral' se nenhuma categoria principal foi selecionada (Req 2)
+                : `${categoriaTexto} -> ${subcategoriaTexto}`;
+
+            produtosSelecionados.push({
+                id: itemId,
+                nome: nomeCompleto
+            });
+            renderizarProdutosSelecionados();
+        }
+
+        // Reseta os campos de seleção
+        $('#categoria_principal_select').val(null).trigger('change');
+        subcategoriaSelect.empty().prop('disabled', true).select2({ placeholder: 'Aguardando categoria...' }).trigger('change');
+        $('#adicionar_produto_btn').prop('disabled', true);
+    });
+
+    // 4. FUNÇÃO DE RENDERIZAÇÃO E ATUALIZAÇÃO DO CAMPO HIDDEN
+    function renderizarProdutosSelecionados() {
+        const container = $('#produtos_selecionados_container');
+        const hiddenInput = $('#produtos_fornecidos_hidden');
+        
+        container.empty();
+        
+        if (produtosSelecionados.length === 0) {
+            container.html('<span class="text-muted" id="placeholder_produtos">Nenhuma categoria/serviço adicionado.</span>');
+            hiddenInput.val('');
+            return;
+        }
+
+        const itensHTML = produtosSelecionados.map(item => {
+            return `<span class="badge bg-primary text-white me-2 mb-1" data-id="${item.id}">
+                        ${item.nome}
+                        <i class="fas fa-times-circle ms-1 remove-produto-btn" style="cursor: pointer;"></i>
+                    </span>`;
+        }).join('');
+        
+        container.html(itensHTML);
+        // Envia a lista de IDs separados por vírgula para o backend
+        hiddenInput.val(produtosSelecionados.map(item => item.id).join(','));
+        
+        // Adicionar evento de remoção
+        $('.remove-produto-btn').on('click', function() {
+            const idParaRemover = $(this).closest('span').data('id').toString();
+            produtosSelecionados = produtosSelecionados.filter(item => item.id.toString() !== idParaRemover);
+            renderizarProdutosSelecionados();
+        });
+    }
+    
+    // 5. LÓGICA DO BOTÃO PAUSAR/ATIVAR (Toggle Status)
+    $('.toggle-status-btn').on('click', function() {
+        const btn = $(this);
+        const fornecedorId = btn.data('fornecedor-id');
+        const novoStatus = btn.data('status'); // 'true' ou 'false'
+        const url = URL_ALTERAR_STATUS.replace('0', fornecedorId);
+        
+        if (confirm(`Tem certeza que deseja ${novoStatus === 'true' ? 'ATIVAR' : 'INATIVAR'} este fornecedor?`)) {
+            $.ajax({
+                url: url,
+                type: 'POST',
+                data: {
+                    // Novo status para enviar
+                    'ativo': novoStatus, 
+                    // CSRF Token (necessário para todas as requisições POST)
+                    'csrfmiddlewaretoken': getCookie('csrftoken') 
+                },
+                success: function(response) {
+                    if (response.success) {
+                        location.reload(); // Recarrega a página após o sucesso
+                    } else {
+                        alert('Erro ao alterar status: ' + response.message);
+                    }
+                },
+                error: function(xhr) {
+                    alert('Erro na comunicação com o servidor.');
+                }
+            });
+        }
+    });
+
 });
 </script>
 {% endblock %}
