@@ -5,6 +5,7 @@ from django.contrib import messages
 from django.http import JsonResponse
 from django.utils import timezone
 from django.db.models import Count, Q, Sum, F, DecimalField, Prefetch
+from django.core.paginator import EmptyPage, PageNotAnInteger 
 from django.db.models.functions import Coalesce
 from django.views.decorators.csrf import csrf_exempt
 from difflib import SequenceMatcher
@@ -621,30 +622,111 @@ def iniciar_recebimento(request, solicitacao_id):
 
 
 
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger 
+# ... (outras imports) ...
+
+
+# ... (outras funções) ...
+
+
 @login_required
 def historico_recebimentos(request):
-    user = request.user
-    perfil = user.perfil
+    # Lista de perfis permitidos a VISUALIZAR o Histórico de Recebimentos
+    perfis_permitidos = ['almoxarife_obra', 'engenheiro', 'almoxarife_escritorio', 'diretor']
 
-    # PERMISSÃO AMPLIADA PARA ENGENHEIRO
-    if perfil not in ['almoxarife_obra', 'almoxarife_escritorio', 'diretor', 'engenheiro']:
-        messages.error(request, 'Acesso negado.')
+    if request.user.perfil not in perfis_permitidos:
+        messages.error(request, 'Acesso negado. Apenas Almoxarife (Obra/Escritório), Engenheiro e Diretor podem visualizar este histórico.')
         return redirect('materiais:dashboard')
 
-    if perfil in ['almoxarife_escritorio', 'diretor']:
-        base_query = Recebimento.objects.all()
-    else: # almoxarife_obra ou engenheiro
-        user_obras = user.obras.all()
-        base_query = Recebimento.objects.filter(solicitacao__obra__in=user_obras)
+    # --- INÍCIO DA LÓGICA DE FILTROS, ORDENAÇÃO E PAGINAÇÃO ---
     
-    materiais_recebidos = base_query.select_related(
-        'solicitacao__obra', 'recebedor'
-    ).prefetch_related(
-        'itens_recebidos__item_solicitado'
-    ).order_by('-data_recebimento')
+    # 1. Captura de Parâmetros
+    termo_busca = request.GET.get('q', '').strip()
+    ano = request.GET.get('ano', '')
+    mes = request.GET.get('mes', '')
+    categoria_id = request.GET.get('categoria', '')
+    per_page_str = request.GET.get('per_page', '10') # Padrão 10 itens por página
+    sort_by = request.GET.get('sort', '-data_recebimento') # Ordenação padrão: mais recente
+    sort_dir = request.GET.get('dir', 'desc')
+    page = request.GET.get('page')
+    
+    try:
+        per_page = int(per_page_str)
+        if per_page <= 0: per_page = 10
+    except ValueError:
+        per_page = 10
+        
+    # Ajusta a ordenação para o Django
+    if sort_dir == 'desc' and sort_by[0] != '-':
+        sort_key = f'-{sort_by}'
+    elif sort_dir == 'asc' and sort_by[0] == '-':
+        sort_key = sort_by[1:]
+    else:
+        sort_key = sort_by
+        
+    # 2. Construção da Query Base (OTIMIZAÇÃO PARA NOVO DESIGN)
+    base_query = Recebimento.objects.filter(
+        recebedor=request.user
+    ).select_related(
+        'solicitacao__obra', 
+        'solicitacao__categoria_sc',
+        # Pré-carrega a Requisição, Cotação e Fornecedor para evitar N+1 queries
+        'solicitacao__requisicao',
+        'solicitacao__requisicao__cotacao_vencedora',
+        'solicitacao__requisicao__cotacao_vencedora__fornecedor',
+    ).prefetch_related('itens_recebidos__item_solicitado') # Pré-carrega os itens recebidos
+
+    # 3. Aplicação dos Filtros
+    recebimentos_feitos = base_query
+    
+    # Filtro de Busca Rápida (q): Busca em RM, SC e Itens
+    if termo_busca:
+        recebimentos_feitos = recebimentos_feitos.filter(
+            Q(solicitacao__numero__icontains=termo_busca) |
+            Q(solicitacao__requisicao__numero__icontains=termo_busca) |
+            Q(itens_recebidos__item_solicitado__descricao__icontains=termo_busca)
+        ).distinct()
+    
+    # Filtros por Ano/Mês (data do recebimento)
+    if ano:
+        recebimentos_feitos = recebimentos_feitos.filter(data_recebimento__year=ano)
+    
+    if mes:
+        recebimentos_feitos = recebimentos_feitos.filter(data_recebimento__month=mes)
+        
+    # Filtro por Categoria da SC
+    if categoria_id:
+        recebimentos_feitos = recebimentos_feitos.filter(solicitacao__categoria_sc_id=categoria_id)
+
+    # 4. Ordenação e Paginação
+    recebimentos_feitos = recebimentos_feitos.order_by(sort_key)
+    
+    paginator = Paginator(recebimentos_feitos, per_page)
+    try:
+        recebimentos_paginados = paginator.page(page)
+    except PageNotAnInteger:
+        recebimentos_paginados = paginator.page(1)
+    except EmptyPage:
+        recebimentos_paginados = paginator.page(paginator.num_pages)
+
+    # --- FIM DA LÓGICA DE FILTROS, ORDENAÇÃO E PAGINAÇÃO ---
 
     context = {
-        'materiais_recebidos': materiais_recebidos
+        'materiais_recebidos': recebimentos_paginados,
+        
+        # Variáveis para filtros/paginação
+        'categorias_sc': CategoriaSC.objects.all().order_by('nome'),
+        'meses_opcoes': range(1, 13),
+        'filtros_aplicados': {
+            'q': termo_busca,
+            'ano': ano,
+            'mes': mes,
+            'categoria': categoria_id,
+        },
+        'per_page_options': [10, 25, 50, 100],
+        'per_page': per_page,
+        'current_sort': sort_by.lstrip('-'),
+        'current_dir': sort_dir,
     }
     return render(request, 'materiais/historico_recebimentos.html', context)
 
@@ -698,20 +780,7 @@ def cadastrar_itens(request):
             messages.error(request, f'❌ Já existe um item com a descrição "{descricao}"!')
             return render(request, 'materiais/cadastrar_itens.html', contexto_erro)
         
-        if not forcar_cadastro:
-            itens_similares = []
-            for item_existente in ItemCatalogo.objects.only('codigo', 'descricao'):
-                similaridade = similaridade_texto(descricao, item_existente.descricao)
-                if similaridade >= 0.7:
-                    itens_similares.append({
-                        'item': item_existente,
-                        'similaridade': round(similaridade * 100, 1)
-                    })
-            
-            if itens_similares:
-                contexto_erro['itens_similares'] = itens_similares
-                contexto_erro['mostrar_confirmacao'] = True
-                return render(request, 'materiais/cadastrar_itens.html', contexto_erro)
+
         
         try:
             categoria_final_obj = get_object_or_404(CategoriaItem, id=subcategoria_id)
@@ -1365,16 +1434,78 @@ def historico_aprovacoes(request):
         messages.error(request, 'Acesso negado.')
         return redirect('materiais:dashboard')
 
-    # Busca no banco de dados todas as SCs onde o 'aprovador' é o usuário logado
-    solicitacoes_aprovadas = SolicitacaoCompra.objects.filter(
-        aprovador=request.user
-    ).select_related('obra', 'solicitante').order_by('-data_aprovacao')
+    # Pega os valores dos filtros da URL (GET)
+    termo_busca = request.GET.get('q', '').strip()
+    ano = request.GET.get('ano', '')
+    mes = request.GET.get('mes', '')
+    categoria_id = request.GET.get('categoria', '')
+    page = request.GET.get('page')
+    
+    # [NOVO] Captura o número de itens por página ou define o padrão
+    num_paginas_str = request.GET.get('num_paginas', '20')
+    try:
+        num_paginas = int(num_paginas_str)
+        if num_paginas <= 0 or num_paginas > 100: # Limite sensato para evitar problemas
+            num_paginas = 20
+    except ValueError:
+        num_paginas = 20
 
+    # 1. Query base: filtra APENAS as solicitações APROVADAS pelo usuário logado
+    base_query = SolicitacaoCompra.objects.filter(
+        aprovador=request.user
+    ).select_related('obra', 'solicitante', 'categoria_sc').prefetch_related('itens').order_by('-data_aprovacao')
+
+    # 2. Aplica os filtros adicionais
+    solicitacoes_aprovadas = base_query
+    if termo_busca:
+        solicitacoes_aprovadas = solicitacoes_aprovadas.filter(
+            Q(numero__icontains=termo_busca) |
+            Q(justificativa__icontains=termo_busca) |
+            Q(itens__descricao__icontains=termo_busca) |
+            Q(obra__nome__icontains=termo_busca)
+        ).distinct()
+    
+    if ano:
+        # Filtra pelo ano de criação da SC
+        solicitacoes_aprovadas = solicitacoes_aprovadas.filter(data_criacao__year=ano)
+    
+    if mes:
+        # Filtra pelo mês de criação da SC
+        solicitacoes_aprovadas = solicitacoes_aprovadas.filter(data_criacao__month=mes)
+        
+    if categoria_id:
+        solicitacoes_aprovadas = solicitacoes_aprovadas.filter(categoria_sc_id=categoria_id)
+
+    # 3. OTIMIZAÇÃO: Adiciona a contagem de itens
+    solicitacoes_aprovadas = solicitacoes_aprovadas.annotate(num_itens=Count('itens'))
+    
+    # 4. PAGINAÇÃO - Usa a variável num_paginas
+    paginator = Paginator(solicitacoes_aprovadas, num_paginas)
+    try:
+        solicitacoes_paginadas = paginator.page(page)
+    except PageNotAnInteger:
+        solicitacoes_paginadas = paginator.page(1)
+    except EmptyPage:
+        solicitacoes_paginadas = paginator.page(paginator.num_pages)
+    
+    # 5. Monta o contexto
     context = {
-        'solicitacoes': solicitacoes_aprovadas
+        # Envia a página de objetos em vez do queryset completo
+        'solicitacoes': solicitacoes_paginadas,
+        'categorias_sc': CategoriaSC.objects.all().order_by('nome'),
+        'meses_opcoes': range(1, 13),
+        'filtros_aplicados': {
+            'q': termo_busca,
+            'ano': ano,
+            'mes': mes,
+            'categoria': categoria_id,
+        },
+        # [NOVO] Adiciona as opções de paginação ao contexto
+        'num_paginas_opcoes': [10, 25, 50, 100],
+        'num_paginas': num_paginas
     }
     
-    return render(request, 'materiais/historico_aprovacoes.html', context)
+    return render(request, 'materiais/historico_aprovacoes.html', context)    
 
 @login_required
 def rejeitar_pelo_escritorio(request, solicitacao_id):
@@ -1821,8 +1952,10 @@ def api_subcategorias(request, categoria_id):
 
 @login_required
 def editar_item(request, item_id):
-    if request.user.perfil != 'almoxarife_escritorio':
-        messages.error(request, 'Acesso negado.')
+    # CORREÇÃO: Acesso liberado para engenheiro, almoxarife_escritorio e diretor
+    PERFIS_PERMITIDOS = ['almoxarife_escritorio', 'diretor', 'engenheiro']
+    if request.user.perfil not in PERFIS_PERMITIDOS:
+        messages.error(request, 'Você não tem permissão para editar itens do catálogo.')
         return redirect('materiais:dashboard')
 
     item_para_editar = get_object_or_404(ItemCatalogo, id=item_id)
@@ -2434,3 +2567,65 @@ def dividir_solicitacao_agregado(request, solicitacao_id):
     except Exception as e:
         messages.error(request, f"Ocorreu um erro ao tentar dividir a solicitação: {e}")
         return redirect('materiais:gerenciar_cotacoes')
+
+@login_required
+def api_item_check(request):
+    """API para verificar duplicidade ou similaridade de item em tempo real."""
+    # PERFIS CORRIGIDOS para incluir 'engenheiro', conforme a regra de acesso à função de cadastro.
+    if request.user.perfil not in ['almoxarife_escritorio', 'diretor', 'engenheiro']:
+        return JsonResponse({'status': 'denied', 'message': 'Acesso negado para esta função de API.'}, status=403)
+        
+    descricao = request.GET.get('descricao', '').strip()
+
+    if not descricao:
+        return JsonResponse({'status': 'ok', 'message': 'Descrição vazia.'})
+
+    # 1. Verifica Duplicidade Exata (Case-Insensitive)
+    if ItemCatalogo.objects.filter(descricao__iexact=descricao).exists():
+        return JsonResponse({'status': 'exact_duplicate', 'message': '❌ Item idêntico já cadastrado no catálogo.'})
+
+    # 2. Verifica Similaridade (Fuzzy Match, usando threshold de 0.6 para maior sensibilidade)
+    itens_similares = []
+    threshold = 0.6 # Valor ajustado anteriormente para maior sensibilidade
+    for item_existente in ItemCatalogo.objects.only('codigo', 'descricao'):
+        similaridade = similaridade_texto(descricao, item_existente.descricao)
+        if similaridade >= threshold:
+            itens_similares.append({
+                'id': item_existente.id, 
+                'codigo': item_existente.codigo,
+                'descricao': item_existente.descricao,
+                'similaridade': round(similaridade * 100, 1)
+            })
+
+    if itens_similares:
+        return JsonResponse({
+            'status': 'similar', 
+            'message': 'Encontrado(s) item(ns) similar(es). Por favor, confirme o cadastro para evitar duplicidade.',
+            'itens': itens_similares
+        })
+
+    return JsonResponse({'status': 'ok', 'message': 'Descrição única.'})
+
+@login_required
+def apagar_item(request, item_id):
+    """View para apagar um item do catálogo."""
+    PERFIS_PERMITIDOS = ['almoxarife_escritorio', 'diretor', 'engenheiro']
+    if request.user.perfil not in PERFIS_PERMITIDOS:
+        messages.error(request, 'Você não tem permissão para apagar itens do catálogo.')
+        return redirect('materiais:cadastrar_itens')
+
+    item = get_object_or_404(ItemCatalogo, pk=item_id)
+
+    # A exclusão só deve ser processada via POST (segurança)
+    if request.method == 'POST':
+        try:
+            item.delete()
+            messages.success(request, f'Item "{item.descricao}" (Código: {item.codigo}) apagado com sucesso do catálogo.')
+            return redirect('materiais:cadastrar_itens')
+        except Exception as e:
+            messages.error(request, f'Erro ao apagar o item: {e}')
+            return redirect('materiais:cadastrar_itens')
+
+    # Caso alguém tente acessar via GET, redireciona com aviso
+    messages.warning(request, 'A exclusão deve ser feita via POST (botão de apagar).')
+    return redirect('materiais:cadastrar_itens')

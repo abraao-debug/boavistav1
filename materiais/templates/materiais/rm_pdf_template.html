@@ -6,7 +6,8 @@
     <style>
         @page { size: A4; margin: 1cm; }
         body { font-family: 'Helvetica', 'Arial', sans-serif; font-size: 10pt; }
-        .cabecalho { text-align: center; border-bottom: 2px solid #333; padding-bottom: 10px; }
+        /* AJUSTE: Removendo o border-bottom do CSS para controlar a linha com HR */
+        .cabecalho { text-align: center; padding-bottom: 0; } 
         .cabecalho h1 { font-size: 18pt; margin: 0; }
         .cabecalho p { font-size: 8pt; margin: 2px 0; }
         .titulo-doc { font-size: 14pt; font-weight: bold; text-align: center; margin: 20px 0; }
@@ -56,11 +57,25 @@
     </style>
 </head>
 <body>
-    <div class="cabecalho">
-        <h1>{{ empresa.NOME }}</h1>
-        <p>{{ empresa.ENDERECO }}</p>
-        <p>CNPJ: {{ empresa.CNPJ }} | Telefone: {{ empresa.TELEFONE }} | E-mail: {{ empresa.EMAIL }}</p>
-    </div>
+   <div class="cabecalho">
+    <table style="width: 100%; margin: 0 auto; table-layout: fixed;">
+        <tr>
+            <td style="width: 20%; text-align: left; padding: 0; vertical-align: middle;">
+                {# Logo é exibido aqui #}
+                <img src="{{ empresa.LOGO_URL }}" style="max-width: 100px; height: auto; display: block;">
+            </td>
+            {# AJUSTE FEITO AQUI: text-align: center (centralizado) e padding-right: 50px para deslocar o bloco um pouco para a esquerda #}
+            <td style="width: 80%; text-align: center; padding: 0; vertical-align: middle; padding-right: 50px;">
+                <h1 style="font-size: 14pt; margin: 0; text-align: center;">{{ empresa.NOME }}</h1>
+                <p style="font-size: 9pt; margin: 2px 0; text-align: center;">{{ empresa.ENDERECO }}</p>
+                <p style="font-size: 9pt; margin: 2px 0; text-align: center;">{{ empresa.CNPJ_COMPLETO }}</p>
+                <p style="font-size: 9pt; margin: 2px 0; text-align: center;">Tel: {{ empresa.TELEFONE }} | E-mail: {{ empresa.EMAIL }}</p>
+            </td>
+        </tr>
+    </table>
+    {# Linha de separação ÚNICA #}
+    <hr style="border: 0; border-top: 2px solid #333; margin-top: 10px; margin-bottom: 10px;">
+</div>
 
     <h2 class="titulo-doc">REQUISIÇÃO DE MATERIAIS</h2>
 
@@ -114,8 +129,7 @@
                 <td>{{ item_solicitado.unidade }}</td>
                 <td class="descricao">{{ item_solicitado.descricao }}</td>
                 <td class="numero">R$ {{ item_cotado.preco|floatformat:"2" }}</td>
-                
-                <td class="numero">R$ {% if itens_cotados|length == 1 %}{{ subtotal_itens|floatformat:"2" }}{% else %}{% widthratio item_cotado.preco 1 item_solicitado.quantidade as subtotal %}{{ subtotal|floatformat:"2" }}{% endif %}</td>
+                <td class="numero">R$ {% widthratio item_cotado.preco 1 item_solicitado.quantidade as subtotal %}{{ subtotal|floatformat:"2" }}</td>
             </tr>
             {% endwith %}
             {% endfor %}

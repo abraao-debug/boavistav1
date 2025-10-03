@@ -1,9 +1,37 @@
 {% extends 'materiais/base.html' %}
-{% block title %}Histórico de Recebimentos - Gestão de Obra{% endblock %}
+{% load materiais_extras %} {% block title %}Histórico de Recebimentos - Gestão de Obra{% endblock %}
 
 {% block content %}
 <style>
     {% include 'materiais/styles_dashboard.css' %}
+    /* Estilos do card de recebimento adaptados do modelo "Receber Material" */
+    .sc-card {
+        background-color: #ffffff;
+        border: 1px solid #e9ecef;
+        border-left-width: 4px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        margin-bottom: 1.5rem;
+        border-left-color: #28a745; /* Cor verde para indicar Recebido/Histórico */
+    }
+    .info-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 1rem;
+        font-size: 0.9rem;
+        padding-top: 5px;
+    }
+    .info-grid strong {
+        display: block;
+        color: #6c757d;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        margin-bottom: 2px;
+    }
+    .itens-recebidos-lista {
+        list-style: none;
+        padding-left: 0;
+        font-size: 0.9em;
+    }
 </style>
 
 <div class="d-flex align-items-center mb-3">
@@ -17,54 +45,122 @@
 </div>
 <hr class="mb-4">
 
-{% if materiais_recebidos %}
+{# --- FORMULÁRIO DE FILTROS --- #}
+<div class="card mb-4">
+    <div class="card-body bg-light">
+        <form method="GET" action="{% url 'materiais:historico_recebimentos' %}" id="formFiltros">
+            <input type="hidden" name="per_page" value="{{ per_page }}" id="perPageHidden">
+            <input type="hidden" name="sort" value="{{ current_sort }}">
+            <input type="hidden" name="dir" value="{{ current_dir }}">
+            
+            <div class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <label for="q" class="form-label">Busca Rápida (SC/RM/Item)</label>
+                    <input type="text" name="q" id="q" class="form-control" value="{{ filtros_aplicados.q }}" placeholder="Código, RM, Item...">
+                </div>
+                <div class="col-md-2">
+                    <label for="ano" class="form-label">Ano</label>
+                    <input type="number" name="ano" id="ano" class="form-control" value="{{ filtros_aplicados.ano }}" placeholder="Ex: 2025">
+                </div>
+                <div class="col-md-2">
+                    <label for="mes" class="form-label">Mês</label>
+                    <select name="mes" id="mes" class="form-select">
+                        <option value="">Todos</option>
+                        {% for mes_num in meses_opcoes %}
+                        <option value="{{ mes_num }}" {% if filtros_aplicados.mes == mes_num|stringformat:"s" %}selected{% endif %}>{{ mes_num }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="categoria" class="form-label">Categoria SC</label>
+                    <select name="categoria" id="categoria" class="form-select">
+                        <option value="">Todas</option>
+                        {% for cat in categorias_sc %}
+                        <option value="{{ cat.id }}" {% if filtros_aplicados.categoria == cat.id|stringformat:"s" %}selected{% endif %}>{{ cat.nome }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-primary w-100"><i class="fas fa-search"></i> Filtrar</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+{# --- EXIBIÇÃO DE RESULTADOS --- #}
+{% if materiais_recebidos.paginator.count > 0 %}
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <p class="text-muted mb-0">
+            Mostrando {{ materiais_recebidos.start_index }} a {{ materiais_recebidos.end_index }} de {{ materiais_recebidos.paginator.count }} recebimentos.
+        </p>
+        <div class="d-flex align-items-center">
+            <span class="me-2 text-muted">Mostrar:</span>
+            <select class="form-select form-select-sm" id="numPaginasSelect" style="width: auto;">
+                {% for num in per_page_options %}
+                    <option value="{{ num }}" {% if num == per_page %}selected{% endif %}>{{ num }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+
     <div class="row">
         {% for recebimento in materiais_recebidos %}
-        <div class="col-md-6 mb-3">
-            <div class="card h-100">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h6 class="mb-0">SC: {{ recebimento.solicitacao.numero }}</h6>
-                    
-                    {% if recebimento.solicitacao.status == 'recebida' %}
-                        <span class="status-badge badge-entregue">Recebida (Completa)</span>
-                    {% else %}
-                        <span class="badge bg-info">Recebimento Parcial</span>
-                    {% endif %}
-                </div>
+        <div class="col-12">
+            <div class="card sc-card">
                 <div class="card-body">
-                    <div class="row">
-                        <div class="col-6">
-                            <small class="text-muted">Obra:</small>
-                            <p class="mb-2">{{ recebimento.solicitacao.obra.nome|default:"-" }}</p>
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <div>
+                            <h5 class="mb-0 text-primary">SC: {{ recebimento.solicitacao.numero }}</h5>
+                            {% with requisicao=recebimento.solicitacao.requisicao %}
+                                {% if requisicao %}
+                                    <small class="text-muted">RM: {{ requisicao.numero }}</small>
+                                {% endif %}
+                            {% endwith %}
                         </div>
-                        <div class="col-6">
-                            <small class="text-muted">Data da Entrega:</small>
-                            <p class="mb-2">{{ recebimento.data_recebimento|date:"d/m/Y H:i" }}</p>
-                        </div>
-                        <div class="col-12">
-                            <small class="text-muted">Recebido por:</small>
-                            <p class="mb-1">{{ recebimento.recebedor.get_full_name|default:recebimento.recebedor.username }}</p>
+                        <div class="d-flex flex-column align-items-end">
+                             <a href="#" class="btn btn-sm btn-info mb-2" data-bs-toggle="modal" data-bs-target="#modalDetalhesSC" data-sc-id="{{ recebimento.solicitacao.id }}">
+                                <i class="fas fa-eye"></i> Detalhes SC
+                            </a>
+                            <span class="badge bg-success">Recebido em {{ recebimento.data_recebimento|date:"d/m/Y" }}</span>
                         </div>
                     </div>
-                    <hr class="my-3">
                     
-                    <h6 class="mb-2"><i class="fas fa-box"></i> Itens nesta entrega:</h6>
-                    {% if recebimento.itens_recebidos.all %}
-                        <ul class="list-unstyled">
-                            {% for item in recebimento.itens_recebidos.all %}
-                                <li>- {{ item.quantidade_recebida|floatformat:"-2" }} {{ item.item_solicitado.unidade }} de <strong>{{ item.item_solicitado.descricao }}</strong></li>
+                    <div class="info-grid">
+                        <div>
+                            <strong>FORNECEDOR:</strong>
+                            {% with fornecedor=recebimento.solicitacao.requisicao.cotacao_vencedora.fornecedor %}
+                                {{ fornecedor.nome_fantasia|default:"N/A" }}
+                            {% endwith %}
+                        </div>
+                        <div>
+                            <strong>OBRA:</strong>
+                            {{ recebimento.solicitacao.obra.nome|default:"-" }}
+                        </div>
+                        <div>
+                            <strong>DATA RECEBIMENTO:</strong>
+                            {{ recebimento.data_recebimento|date:"d/m/Y" }}
+                        </div>
+                        <div>
+                            <strong>PREV. ENTREGA:</strong>
+                            {% with prazo=recebimento.solicitacao.requisicao.cotacao_vencedora.prazo_entrega %}
+                                {{ prazo|default:"Não informado" }}
+                            {% endwith %}
+                        </div>
+                    </div>
+                    
+                    <hr>
+                    
+                    <div>
+                        <strong class="d-block mb-1" style="font-size: 0.9rem;">Itens Recebidos:</strong>
+                        <ul class="itens-recebidos-lista">
+                            {% for item_recebido in recebimento.itens_recebidos.all %}
+                                <li>- {{ item_recebido.quantidade_recebida|floatformat:"-2" }} {{ item_recebido.item_solicitado.unidade }} de <strong>{{ item_recebido.item_solicitado.descricao|truncatechars:70 }}</strong></li>
                             {% endfor %}
                         </ul>
-                    {% else %}
-                        <p class="text-muted small">Nenhum item foi registrado nesta entrega específica.</p>
-                    {% endif %}
-                    
-                    {% if recebimento.observacoes %}
-                        <p class="mt-2 mb-0"><small class="text-muted"><strong>Obs:</strong> {{ recebimento.observacoes }}</small></p>
-                    {% endif %}
-                </div>
-                <div class="card-footer bg-light">
-                    <div class="d-flex gap-2">
+                    </div>
+
+                    <div class="d-flex gap-2 mt-3 pt-3 border-top border-light">
                         {% if recebimento.nota_fiscal %}<a href="{{ recebimento.nota_fiscal.url }}" class="btn btn-sm btn-outline-primary" target="_blank">Nota Fiscal</a>{% endif %}
                         {% if recebimento.sc_assinada %}<a href="{{ recebimento.sc_assinada.url }}" class="btn btn-sm btn-outline-secondary" target="_blank">SC Assinada</a>{% endif %}
                         {% if recebimento.boleto_comprovante %}<a href="{{ recebimento.boleto_comprovante.url }}" class="btn btn-sm btn-outline-info" target="_blank">Boleto</a>{% endif %}
@@ -74,16 +170,104 @@
         </div>
         {% endfor %}
     </div>
+
+    {# --- Controles de Paginação (com JS para manter filtros) --- #}
+    <div class="d-flex justify-content-center mt-3">
+        <nav aria-label="Navegação de páginas">
+            <ul class="pagination" id="paginationControls">
+                {% if materiais_recebidos.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="#" data-page="{{ materiais_recebidos.previous_page_number }}" aria-label="Anterior">
+                            <span aria-hidden="true">&laquo;</span>
+                        </a>
+                    </li>
+                {% else %}
+                    <li class="page-item disabled"><span class="page-link">&laquo;</span></li>
+                {% endif %}
+
+                {% for i in materiais_recebidos.paginator.page_range %}
+                    <li class="page-item {% if materiais_recebidos.number == i %}active{% endif %}">
+                        <a class="page-link" href="#" data-page="{{ i }}">{{ i }}</a>
+                    </li>
+                {% endfor %}
+
+                {% if materiais_recebidos.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="#" data-page="{{ materiais_recebidos.next_page_number }}" aria-label="Próxima">
+                            <span aria-hidden="true">&raquo;</span>
+                        </a>
+                    </li>
+                {% else %}
+                    <li class="page-item disabled"><span class="page-link">&raquo;</span></li>
+                {% endif %}
+            </ul>
+        </nav>
+    </div>
+    {# --- FIM: Controles de Paginação --- #}
+    
 {% else %}
     <div class="card">
         <div class="card-body text-center p-5">
             <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
             <h5>Nenhum recebimento encontrado</h5>
-            <p class="text-muted">Você ainda não recebeu nenhum material.</p>
+            <p class="text-muted">Você ainda não recebeu nenhum material. Tente ajustar os filtros.</p>
             <a href="{% url 'materiais:registrar_recebimento' %}" class="btn btn-warning mt-3">
-                <i class="fas fa-truck"></i> Ir para Recebimento de Material
-            </a>
+                <i class="fas fa-truck"></i> Ir para Recebimento de Material            </a>
         </div>
     </div>
 {% endif %}
+
+{% include 'materiais/_modal_detalhes_sc.html' %}
+{% endblock %}
+
+{% block javascript %}
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+    function getFilterParams() {
+        const params = new URLSearchParams(window.location.search);
+        params.delete('page');
+        return params;
+    }
+
+    function setupPaginationAndFilter() {
+        const numPaginasSelect = document.getElementById('numPaginasSelect');
+        const paginationControls = document.getElementById('paginationControls');
+        const perPageHidden = document.getElementById('perPageHidden');
+        
+        // 1. Manipula o dropdown "Mostrar"
+        if (numPaginasSelect && perPageHidden) {
+            numPaginasSelect.addEventListener('change', function() {
+                const form = document.getElementById('formFiltros');
+                if (form) {
+                    // Atualiza o input hidden no formulário de filtros antes de submeter
+                    perPageHidden.value = this.value;
+                    form.submit();
+                }
+            });
+        }
+        
+        // 2. Manipula os links de paginação
+        if (paginationControls) {
+            paginationControls.querySelectorAll('a').forEach(link => {
+                const pageNum = link.getAttribute('data-page');
+                if (pageNum) {
+                    const params = getFilterParams();
+                    params.set('page', pageNum);
+                    
+                    // Inclui o número de itens por página atual (per_page)
+                    const perPage = document.getElementById('numPaginasSelect') ? document.getElementById('numPaginasSelect').value : 10;
+                    params.set('per_page', perPage);
+                    
+                    link.href = `${window.location.pathname}?${params.toString()}`;
+                }
+            });
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        setupPaginationAndFilter();
+    });
+</script>
 {% endblock %}

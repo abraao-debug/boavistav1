@@ -90,4 +90,7 @@ urlpatterns = [
     path('solicitacao/<int:solicitacao_id>/cotacao-agregado/', views.cotacao_agregado, name='cotacao_agregado'),
 
     path('solicitacao/<int:solicitacao_id>/dividir-agregado/', views.dividir_solicitacao_agregado, name='dividir_solicitacao_agregado'),
+    path('api/item-check/', views.api_item_check, name='api_item_check'), 
+    path('apagar-item/<int:item_id>/', views.apagar_item, name='apagar_item'),
+
 ]

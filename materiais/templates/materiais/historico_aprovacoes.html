@@ -17,9 +17,63 @@
 </div>
 <hr class="mb-4">
 
+<div class="card mb-4">
+    <div class="card-body bg-light">
+        <form method="GET" action="{% url 'materiais:historico_aprovacoes' %}" id="formFiltros">
+            <input type="hidden" name="num_paginas" value="{{ num_paginas }}" id="numPaginasHidden">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label for="q" class="form-label">Pesquisa Rápida</label>
+                    <input type="text" name="q" id="q" class="form-control" value="{{ filtros_aplicados.q }}" placeholder="Código, item, obra...">
+                </div>
+                <div class="col-md-2">
+                    <label for="ano" class="form-label">Ano</label>
+                    <input type="number" name="ano" id="ano" class="form-control" value="{{ filtros_aplicados.ano }}" placeholder="Ex: 2025">
+                </div>
+                <div class="col-md-2">
+                    <label for="mes" class="form-label">Mês</label>
+                    <select name="mes" id="mes" class="form-select">
+                        <option value="">Todos</option>
+                        {% for mes_num in meses_opcoes %}
+                        <option value="{{ mes_num }}" {% if filtros_aplicados.mes == mes_num|stringformat:"s" %}selected{% endif %}>{{ mes_num }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label for="categoria" class="form-label">Categoria</label>
+                    <select name="categoria" id="categoria" class="form-select">
+                        <option value="">Todas</option>
+                        {% for cat in categorias_sc %}
+                        <option value="{{ cat.id }}" {% if filtros_aplicados.categoria == cat.id|stringformat:"s" %}selected{% endif %}>{{ cat.nome }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-primary w-100"><i class="fas fa-search"></i> Filtrar</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
 <div class="card">
     <div class="card-body">
         {% if solicitacoes %}
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                 <p class="text-muted mb-0">
+                    Mostrando {{ solicitacoes.start_index }} a {{ solicitacoes.end_index }} de {{ solicitacoes.paginator.count }} solicitações aprovadas.
+                </p>
+                {# --- NOVO: Seletor de quantidade por página --- #}
+                <div class="d-flex align-items-center">
+                    <span class="me-2 text-muted">Mostrar:</span>
+                    <select class="form-select form-select-sm" id="numPaginasSelect" style="width: auto;">
+                        {% for num in num_paginas_opcoes %}
+                            <option value="{{ num }}" {% if num == num_paginas %}selected{% endif %}>{{ num }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {# --- FIM: Seletor de quantidade por página --- #}
+            </div>
             <div class="table-responsive">
                 <table class="table table-hover align-middle">
                     <thead>
@@ -30,6 +84,7 @@
                             <th>Solicitante</th>
                             <th>Data da Aprovação</th>
                             <th>Status Atual</th>
+                            <th>Itens</th>
                             <th>Ações</th>
                         </tr>
                     </thead>
@@ -68,6 +123,9 @@
                                 {% endif %}
                             </td>
                             <td>
+                                <span class="badge bg-light text-dark border">{{ sc.num_itens|default:0 }} item{{ sc.num_itens|default:0|pluralize:"s" }}</span>
+                            </td>
+                            <td>
                                 <button class="btn btn-sm btn-outline-primary btn-ver-detalhes" 
                                         data-bs-toggle="modal" 
                                         data-bs-target="#modalDetalhesSC"
@@ -80,15 +138,100 @@
                     </tbody>
                 </table>
             </div>
+
+            {# --- Controles de Paginação (com JS para manter filtros) --- #}
+            <div class="d-flex justify-content-center">
+                <nav aria-label="Navegação de páginas">
+                    <ul class="pagination" id="paginationControls">
+                        {# Os links de paginação são gerados por JavaScript para preservar os filtros #}
+                        {% if solicitacoes.has_previous %}
+                            <li class="page-item">
+                                <a class="page-link" href="#" data-page="{{ solicitacoes.previous_page_number }}" aria-label="Anterior">
+                                    <span aria-hidden="true">&laquo;</span>
+                                </a>
+                            </li>
+                        {% else %}
+                            <li class="page-item disabled"><span class="page-link">&laquo;</span></li>
+                        {% endif %}
+
+                        {% for i in solicitacoes.paginator.page_range %}
+                            <li class="page-item {% if solicitacoes.number == i %}active{% endif %}">
+                                <a class="page-link" href="#" data-page="{{ i }}">{{ i }}</a>
+                            </li>
+                        {% endfor %}
+
+                        {% if solicitacoes.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="#" data-page="{{ solicitacoes.next_page_number }}" aria-label="Próxima">
+                                    <span aria-hidden="true">&raquo;</span>
+                                </a>
+                            </li>
+                        {% else %}
+                            <li class="page-item disabled"><span class="page-link">&raquo;</span></li>
+                        {% endif %}
+                    </ul>
+                </nav>
+            </div>
+            {# --- FIM: Controles de Paginação --- #}
+
         {% else %}
             <div class="text-center p-5">
-                <i class="fas fa-check-circle fa-3x text-muted mb-3"></i>
-                <h5>Você ainda não aprovou nenhuma solicitação.</h5>
+                <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                <h5>Nenhuma solicitação aprovada encontrada.</h5>
+                <p class="text-muted">Tente ajustar os filtros.</p>
             </div>
         {% endif %}
     </div>
 </div>
 
 {% include 'materiais/_modal_detalhes_sc.html' %}
+{% endblock %}
+
+{% block javascript %}
+<script>
+    // Função para obter os parâmetros de filtro da URL
+    function getFilterParams() {
+        const params = new URLSearchParams(window.location.search);
+        // Remove a página e o número de páginas para não duplicar, ou para garantir que sempre reinicie a paginação corretamente
+        params.delete('page');
+        return params;
+    }
+
+    // Função para atualizar todos os links de paginação e o dropdown 'Mostrar'
+    function setupPaginationAndFilter() {
+        const numPaginasSelect = document.getElementById('numPaginasSelect');
+        const paginationControls = document.getElementById('paginationControls');
+        const formFiltros = document.getElementById('formFiltros');
+        
+        // 1. Manipula o dropdown "Mostrar"
+        if (numPaginasSelect) {
+            numPaginasSelect.addEventListener('change', function() {
+                const url = new URL(window.location.href);
+                url.searchParams.set('num_paginas', this.value);
+                url.searchParams.set('page', 1); // Sempre volta para a primeira página ao mudar a quantidade
+                window.location.href = url.toString();
+            });
+        }
+        
+        // 2. Manipula os links de paginação
+        if (paginationControls) {
+            paginationControls.querySelectorAll('a').forEach(link => {
+                const pageNum = link.getAttribute('data-page');
+                if (pageNum) {
+                    // Cria uma cópia dos filtros atuais
+                    const params = getFilterParams();
+                    params.set('page', pageNum);
+                    
+                    // Constrói a URL final
+                    link.href = `${window.location.pathname}?${params.toString()}`;
+                }
+            });
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        setupPaginationAndFilter();
+    });
+</script>
 
 {% endblock %}
