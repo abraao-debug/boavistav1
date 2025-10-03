@@ -34,6 +34,7 @@ class Command(BaseCommand):
             'Acabamentos': ['Revestimento', 'Louças', 'Piso', 'Granitos', 'Acessórios Metálicos', 'Pintura', 'Forro'],
             'Gerais': ['Aditivo', 'Medicamentos', 'Limpeza', 'Utensílio', 'Material para escritório'],
             'Piscina': ['Acessórios de piscina'],
+            'Agregados': ['Areia'],
             'Paisagismo': ['Plantas', 'Mudas de mini ixora', 'Mudas de pingo de ouro', 'Grama em placas'],
             'Equipamentos': ['Ferramentas'],
             'Fardamento': ['Calça', 'Camisa administração', 'Camisa reciclando', 'Camisa mestre de obras', 'Camisa geral'],
