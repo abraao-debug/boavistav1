@@ -114,7 +114,8 @@
                 <td>{{ item_solicitado.unidade }}</td>
                 <td class="descricao">{{ item_solicitado.descricao }}</td>
                 <td class="numero">R$ {{ item_cotado.preco|floatformat:"2" }}</td>
-                <td class="numero">R$ {% widthratio item_cotado.preco 1 item_solicitado.quantidade as subtotal %}{{ subtotal|floatformat:"2" }}</td>
+                
+                <td class="numero">R$ {% if itens_cotados|length == 1 %}{{ subtotal_itens|floatformat:"2" }}{% else %}{% widthratio item_cotado.preco 1 item_solicitado.quantidade as subtotal %}{{ subtotal|floatformat:"2" }}{% endif %}</td>
             </tr>
             {% endwith %}
             {% endfor %}

@@ -83,4 +83,11 @@ urlpatterns = [
     
 # Adicione esta linha em materiais/urls.py
     path('excluir-categoria-item/<int:categoria_id>/', views.excluir_categoria_item, name='excluir_categoria_item'),
+    # Adicione esta linha junto com as outras de recebimento
+    path('recebimento/iniciar/<int:solicitacao_id>/', views.iniciar_recebimento, name='iniciar_recebimento'),
+
+    # Adicione esta linha junto com as outras de cotação
+    path('solicitacao/<int:solicitacao_id>/cotacao-agregado/', views.cotacao_agregado, name='cotacao_agregado'),
+
+    path('solicitacao/<int:solicitacao_id>/dividir-agregado/', views.dividir_solicitacao_agregado, name='dividir_solicitacao_agregado'),
 ]

@@ -11,6 +11,28 @@
     .select2-container--default .select2-selection--single { height: calc(1.5em + .75rem + 2px); padding: .375rem .75rem; border: 1px solid #ced4da; }
     .select2-container--default .select2-selection--single .select2-selection__rendered { line-height: 1.5; padding-left: 0; }
     .select2-container--default .select2-selection--single .select2-selection__arrow { height: calc(1.5em + .75rem); }
+    /* AJUSTE VISUAL PARA O BOTÃO DE EMERGÊNCIA */
+    .emergency-box {
+        /* Usa flexbox apenas para o alinhamento vertical, mantendo o conteúdo à esquerda */
+        display: flex;
+        align-items: center;
+    }
+    .emergency-box .form-check.form-switch {
+        font-size: 1.25rem;
+        padding-left: 0; /* Remove padding padrão para controle manual */
+        display: inline-flex; /* Alinha o botão e o texto na mesma linha */
+        align-items: center;
+    }
+    .emergency-box .form-check-input { 
+        width: 3em; 
+        height: 1.5em; 
+        float: none; /* Essencial para remover o alinhamento padrão do Bootstrap */
+        margin-left: 0; /* Remove a margem negativa que o puxava para a borda */
+    }
+    .emergency-box .form-check-label {
+        margin-left: 0.75rem; /* Adiciona o espaçamento correto entre o botão e o texto */
+    }
+
 </style>
 
 <form method="POST" id="mainForm">

@@ -1,0 +1,161 @@
+{% extends 'materiais/base.html' %}
+{% block title %}Cotação de Agregado{% endblock %}
+
+{% block content %}
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+
+<div class="d-flex align-items-center mb-3">
+    <a href="{% url 'materiais:gerenciar_cotacoes' %}" class="btn btn-secondary me-3"><i class="fas fa-arrow-left"></i> Voltar</a>
+    <div>
+        <h4 class="mb-0">Pedido Simplificado de Agregado</h4>
+        <p class="text-muted mb-0">SC: {{ solicitacao.numero }} - {{ item.descricao }}</p>
+    </div>
+</div>
+<hr class="mb-4">
+
+<form method="post" id="form-agregado">
+    {% csrf_token %}
+    <div class="card">
+        <div class="card-body">
+            <h5 class="mb-3">Dados da Compra</h5>
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="fornecedor" class="form-label">Fornecedor Fixo *</label>
+                    <select name="fornecedor" id="fornecedor" class="form-select" required>
+                        <option value="" disabled selected>Selecione ou pesquise o fornecedor...</option>
+                        {% for f in fornecedores %}
+                            <option value="{{ f.id }}">{{ f.nome_fantasia }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label for="preco_carrada" class="form-label">Preço por Carrada/Entrega *</label>
+                    <div class="input-group">
+                        <span class="input-group-text">R$</span>
+                        <input type="text" class="form-control" id="preco_carrada" placeholder="0,00" required>
+                        <input type="hidden" name="preco_unitario" id="preco_unitario_hidden">
+                    </div>
+                </div>
+            </div>
+
+            <hr>
+            <h5 class="mb-3">Calculadora de Partições</h5>
+            
+            <div class="row align-items-end bg-light p-3 rounded">
+                <div class="col-md-3">
+                    <label for="quantidade_total_display" class="form-label">1. Quantidade Necessária</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="quantidade_total_display" value="{{ item.quantidade|floatformat:'-2' }}" disabled>
+                        <span class="input-group-text">{{ item.unidade }}</span>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <label for="quantidade_particao" class="form-label">2. Volume da Carrada *</label>
+                    <div class="input-group">
+                        <input type="number" class="form-control" name="quantidade_particao" id="quantidade_particao" step="0.01" required placeholder="Ex: 10">
+                        <span class="input-group-text">{{ item.unidade }}</span>
+                    </div>
+                     <small class="form-text text-muted">Quantos {{ item.unidade }} vêm em 1 carrada?</small>
+                </div>
+                <div class="col-md-6">
+                    <div id="resultado_calculo" class="alert alert-secondary mb-0">
+                        Preencha o volume e o preço da carrada para calcular.
+                    </div>
+                </div>
+            </div>
+
+            <input type="hidden" name="quantidade_total" id="quantidade_total_hidden" value="{{ item.quantidade|floatformat:'-2' }}">
+            
+            <div class="alert alert-warning mt-4">
+                <strong>Atenção:</strong> Após o cálculo, confirme os dados. O sistema irá gerar RMs para cada partição e finalizará a solicitação.
+            </div>
+
+            <div class="text-end">
+                <button type="submit" id="confirmar-btn" class="btn btn-success" disabled>
+                    <i class="fas fa-check-circle"></i> Confirmar e Gerar RMs
+                </button>
+            </div>
+        </div>
+    </div>
+</form>
+{% endblock %}
+
+{% block javascript %}
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // 1. Ativa a busca no select de fornecedores
+    $('#fornecedor').select2();
+
+    // --- INÍCIO DA CORREÇÃO DA MÁSCARA DE PREÇO ---
+    const precoCarradaInput = document.getElementById('preco_carrada');
+    const precoUnitarioHidden = document.getElementById('preco_unitario_hidden');
+
+    precoCarradaInput.addEventListener('input', function(e) {
+        // Pega apenas os dígitos
+        let value = e.target.value.replace(/\D/g, '');
+        if (value === '') {
+            e.target.value = '';
+            return;
+        }
+        // Converte para número, divide por 100 para ter os centavos
+        let numberValue = parseInt(value, 10) / 100;
+        // Formata para o padrão brasileiro (BRL)
+        e.target.value = numberValue.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    });
+    // --- FIM DA CORREÇÃO DA MÁSCARA ---
+
+    const totalInputDisplay = document.getElementById('quantidade_total_display');
+    const particaoInput = document.getElementById('quantidade_particao');
+    const resultadoDiv = document.getElementById('resultado_calculo');
+    const confirmarBtn = document.getElementById('confirmar-btn');
+    const quantidadeTotalHidden = document.getElementById('quantidade_total_hidden');
+
+    function calcularTudo() {
+        const totalNecessario = parseFloat(totalInputDisplay.value.replace(',', '.'));
+        const particao = parseFloat(particaoInput.value);
+        const precoCarradaStr = precoCarradaInput.value.replace(/\./g, '').replace(',', '.');
+        const precoCarrada = parseFloat(precoCarradaStr);
+
+        confirmarBtn.disabled = true;
+
+        if (totalNecessario > 0 && particao > 0 && precoCarrada > 0) {
+            
+            const numCarradas = Math.ceil(totalNecessario / particao);
+            const volumeTotalComprado = numCarradas * particao;
+            const precoUnitario = precoCarrada / particao;
+            const custoTotal = numCarradas * precoCarrada;
+            const sobra = volumeTotalComprado - totalNecessario;
+
+            let htmlResult = `<h6 class="alert-heading">Resultado do Cálculo:</h6>`;
+            htmlResult += `<ul class="mb-0" style="font-size: 0.9em;">
+                            <li><strong>Nº de Carradas a Pedir:</strong> ${numCarradas}</li>
+                            <li><strong>Volume Total a Comprar:</strong> ${volumeTotalComprado.toFixed(2).replace('.',',')} {{ item.unidade }}</li>
+                            <li><strong>Custo Total:</strong> ${custoTotal.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})}</li>
+                            <li><strong>Preço por ${'{{ item.unidade }}'} (calculado):</strong> ${precoUnitario.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})}</li>
+                           </ul>`;
+            
+            resultadoDiv.className = 'alert alert-success mb-0';
+            resultadoDiv.innerHTML = htmlResult;
+
+            if (sobra > 0) {
+                resultadoDiv.innerHTML += `<div class="mt-2 small"><strong>Aviso:</strong> Serão comprados <strong>${sobra.toFixed(2).replace('.',',')} {{ item.unidade }}</strong> a mais para completar a carga.</div>`;
+            }
+
+            // Preenche o campo oculto com o preço unitário calculado
+            precoUnitarioHidden.value = precoUnitario.toFixed(2);
+            quantidadeTotalHidden.value = volumeTotalComprado.toFixed(2);
+
+            confirmarBtn.disabled = false;
+
+        } else {
+            resultadoDiv.className = 'alert alert-secondary mb-0';
+            resultadoDiv.innerHTML = 'Preencha o volume e o preço da carrada para calcular.';
+        }
+    }
+
+    particaoInput.addEventListener('input', calcularTudo);
+    precoCarradaInput.addEventListener('input', calcularTudo);
+});
+</script>
+{% endblock %}

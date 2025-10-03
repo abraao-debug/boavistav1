@@ -14,8 +14,26 @@
     .select2-results__options { max-height: 350px !important; overflow-y: auto !important; }
 
     /* AJUSTE VISUAL PARA O BOTÃO DE EMERGÊNCIA */
-    .emergency-box .form-check.form-switch { font-size: 1.25rem; }
-    .emergency-box .form-check-input { width: 3em; height: 1.5em; }
+    .emergency-box {
+        /* Usa flexbox apenas para o alinhamento vertical, mantendo o conteúdo à esquerda */
+        display: flex;
+        align-items: center;
+    }
+    .emergency-box .form-check.form-switch {
+        font-size: 1.25rem;
+        padding-left: 0; /* Remove padding padrão para controle manual */
+        display: inline-flex; /* Alinha o botão e o texto na mesma linha */
+        align-items: center;
+    }
+    .emergency-box .form-check-input { 
+        width: 3em; 
+        height: 1.5em; 
+        float: none; /* Essencial para remover o alinhamento padrão do Bootstrap */
+        margin-left: 0; /* Remove a margem negativa que o puxava para a borda */
+    }
+    .emergency-box .form-check-label {
+        margin-left: 0.75rem; /* Adiciona o espaçamento correto entre o botão e o texto */
+    }
 </style>
 
 <form method="POST" id="mainForm">

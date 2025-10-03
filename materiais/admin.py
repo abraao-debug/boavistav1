@@ -92,12 +92,32 @@ class ObraAdmin(admin.ModelAdmin):
 
 @admin.register(ItemCatalogo)
 class ItemCatalogoAdmin(admin.ModelAdmin):
-    list_display = ['codigo', 'descricao', 'categoria', 'unidade', 'ativo']
-    list_filter = ('categoria', 'ativo')
+    # Linha 'list_display' atualizada para usar as novas funções
+    list_display = ['codigo', 'descricao', 'get_categoria_principal', 'get_subcategoria', 'unidade', 'ativo']
+    
+    # Filtros aprimorados para permitir filtrar pela categoria principal
+    list_filter = ('categoria__categoria_mae', 'ativo')
+    
     search_fields = ['codigo', 'descricao']
     list_editable = ['ativo']
     autocomplete_fields = ['categoria', 'unidade']
     filter_horizontal = ('tags',)
+
+    @admin.display(description='Categoria Principal', ordering='categoria__categoria_mae__nome')
+    def get_categoria_principal(self, obj):
+        if obj.categoria and obj.categoria.categoria_mae:
+            return obj.categoria.categoria_mae.nome
+        # Se o item está associado a uma categoria principal diretamente
+        elif obj.categoria:
+            return obj.categoria.nome
+        return "-"
+
+    @admin.display(description='Subcategoria', ordering='categoria__nome')
+    def get_subcategoria(self, obj):
+        # Só exibe subcategoria se houver uma categoria pai
+        if obj.categoria and obj.categoria.categoria_mae:
+            return obj.categoria.nome
+        return "-"
 
 @admin.register(SolicitacaoCompra)
 class SolicitacaoCompraAdmin(admin.ModelAdmin):

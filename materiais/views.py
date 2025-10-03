@@ -4,11 +4,14 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.http import JsonResponse
 from django.utils import timezone
-from django.db.models import Count, Q, Sum, F, DecimalField
+from django.db.models import Count, Q, Sum, F, DecimalField, Prefetch
 from django.db.models.functions import Coalesce
 from django.views.decorators.csrf import csrf_exempt
 from difflib import SequenceMatcher
+from django.core.paginator import Paginator
 from .forms import SolicitacaoCompraForm
+from django.db.models import Case, When, Value, IntegerField
+from decimal import Decimal
 from .models import (
     User, SolicitacaoCompra, ItemSolicitacao, Fornecedor, ItemCatalogo, 
     Obra, Cotacao, RequisicaoMaterial, HistoricoSolicitacao, 
@@ -55,13 +58,15 @@ def dashboard(request):
     perfil = request.user.perfil
     user_obras = request.user.obras.all()
     
-    # Lógica de busca já inclui o 'diretor'
-    if perfil in ['almoxarife_escritorio', 'diretor']:
+    # --- LÓGICA DE FILTRAGEM CORRIGIDA ---
+    # O Diretor vê tudo. Os outros perfis veem apenas as obras associadas.
+    if perfil == 'diretor':
         base_query = SolicitacaoCompra.objects.all()
-    elif perfil in ['engenheiro', 'almoxarife_obra']:
+    elif perfil in ['almoxarife_escritorio', 'engenheiro', 'almoxarife_obra']:
         if user_obras.exists():
             base_query = SolicitacaoCompra.objects.filter(obra__in=user_obras)
         else:
+            # Se não está associado a nenhuma obra, não vê nenhuma solicitação.
             base_query = SolicitacaoCompra.objects.none()
     else:
         base_query = SolicitacaoCompra.objects.none()
@@ -74,7 +79,7 @@ def dashboard(request):
         'aprovado': base_query.filter(status__in=aprovado_statuses).count(),
         'em_cotacao': base_query.filter(status__in=cotacao_statuses).count(),
         'requisicoes': base_query.filter(status='finalizada').count(),
-        'a_caminho': base_query.filter(status='a_caminho').count(),
+        'a_caminho': base_query.filter(status__in=['a_caminho', 'recebida_parcial']).count(),
         'entregue': base_query.filter(status='recebida').count(),
     }
 
@@ -88,47 +93,45 @@ def dashboard(request):
         return render(request, 'materiais/dashboard_diretor.html', context)
     else:
         return render(request, 'materiais/dashboard.html')
-    
-# TRECHO COMPLETO E CORRIGIDO A SER COLOCADO NO LUGAR (EM views.py)
 
 @login_required
 def lista_solicitacoes(request):
     status_filtrado = request.GET.get('status', None)
     user = request.user
     
-    # 1. Define uma query base EXATAMENTE como no dashboard, garantindo consistência
-    if user.perfil in ['almoxarife_escritorio', 'diretor']:
+    # --- LÓGICA DE FILTRAGEM CORRIGIDA (IDÊNTICA À DO DASHBOARD) ---
+    if user.perfil == 'diretor':
         base_query = SolicitacaoCompra.objects.all()
     
-    elif user.perfil in ['almoxarife_obra', 'engenheiro']:
+    elif user.perfil in ['almoxarife_escritorio', 'almoxarife_obra', 'engenheiro']:
         user_obras = user.obras.all()
         if user_obras.exists():
             base_query = SolicitacaoCompra.objects.filter(obra__in=user_obras)
         else:
-            base_query = SolicitacaoCompra.objects.none() # Se não tem obra, não vê nada
+            base_query = SolicitacaoCompra.objects.none()
             
     else:
-        # Para perfis não definidos, não retorna nada por segurança
         base_query = SolicitacaoCompra.objects.none()
 
-    # 2. Aplica o filtro de status (se houver) na query base
+    # Aplica o filtro de status (se houver) na query base
     solicitacoes = base_query
-    if status_filtrado and status_filtrado in [s[0] for s in SolicitacaoCompra.STATUS_CHOICES]:
-        
-        # Lógica especial para o status 'aprovada' do card
+    if status_filtrado:
         if status_filtrado == 'aprovada':
             aprovado_statuses = ['aprovada', 'aprovado_engenharia']
             solicitacoes = solicitacoes.filter(status__in=aprovado_statuses)
         
-        # Lógica especial para o status 'em_cotacao' do card
         elif status_filtrado == 'em_cotacao':
             cotacao_statuses = ['em_cotacao', 'aguardando_resposta', 'cotacao_selecionada']
             solicitacoes = solicitacoes.filter(status__in=cotacao_statuses)
             
+        # Adiciona o filtro para o card "A Caminho" incluir os parciais
+        elif status_filtrado == 'a_caminho':
+            solicitacoes = solicitacoes.filter(status__in=['a_caminho', 'recebida_parcial'])
+            
         else:
             solicitacoes = solicitacoes.filter(status=status_filtrado)
 
-    # 3. Monta o contexto final para o template
+    # Monta o contexto final para o template
     context = {
         'solicitacoes': solicitacoes.select_related('obra').order_by('-data_criacao'),
         'status_filtrado': status_filtrado,
@@ -139,52 +142,52 @@ def lista_solicitacoes(request):
 
 @login_required
 def minhas_solicitacoes(request):
-    # Pega os valores dos filtros da URL (GET)
+    # --- Toda a sua lógica de filtros e ordenação continua a mesma ---
     termo_busca = request.GET.get('q', '').strip()
     ano = request.GET.get('ano', '')
     mes = request.GET.get('mes', '')
     categoria_id = request.GET.get('categoria', '')
+    sort_by = request.GET.get('sort', 'data_criacao')
+    direction = request.GET.get('dir', 'desc')
 
-    # 1. Query base: filtra APENAS as solicitações do usuário logado
-    base_query = SolicitacaoCompra.objects.filter(
-        solicitante=request.user
-    ).select_related('obra', 'categoria_sc').prefetch_related('itens').order_by('-data_criacao')
-
-    # 2. Aplica os filtros adicionais, se existirem
-    solicitacoes = base_query
+    base_query = SolicitacaoCompra.objects.filter(solicitante=request.user)
+    # ... (filtros Q(...) para busca) ...
     if termo_busca:
-        solicitacoes = solicitacoes.filter(
-            Q(numero__icontains=termo_busca) |
-            Q(justificativa__icontains=termo_busca) |
-            Q(itens__descricao__icontains=termo_busca) |
-            Q(obra__nome__icontains=termo_busca)
+        base_query = base_query.filter(
+            Q(numero__icontains=termo_busca) | Q(nome_descritivo__icontains=termo_busca) |
+            Q(itens__descricao__icontains=termo_busca) | Q(obra__nome__icontains=termo_busca)
         ).distinct()
-    
-    if ano:
-        solicitacoes = solicitacoes.filter(data_criacao__year=ano)
-    
-    if mes:
-        solicitacoes = solicitacoes.filter(data_criacao__month=mes)
-        
-    if categoria_id:
-        solicitacoes = solicitacoes.filter(categoria_sc_id=categoria_id)
+    if ano: base_query = base_query.filter(data_criacao__year=ano)
+    if mes: base_query = base_query.filter(data_criacao__month=mes)
+    if categoria_id: base_query = base_query.filter(categoria_sc_id=categoria_id)
 
-    # 3. Prepara o contexto para enviar ao template
+    # ... (lógica de anotação e ordenação) ...
+    base_query = base_query.annotate(item_count=Count('itens'))
+    status_order = Case(*[When(status=s[0], then=Value(i)) for i, s in enumerate(SolicitacaoCompra.STATUS_CHOICES)], output_field=IntegerField())
+    base_query = base_query.annotate(status_order=status_order)
+    valid_sort_fields = {'codigo': 'numero', 'obra': 'obra__nome', 'data_criacao': 'data_criacao', 'status': 'status_order', 'itens': 'item_count'}
+    order_field = valid_sort_fields.get(sort_by, 'data_criacao')
+    order = f'-{order_field}' if direction == 'desc' else order_field
+    solicitacoes_list = base_query.select_related('obra').order_by(order)
+
+    # --- INÍCIO DA LÓGICA DE PAGINAÇÃO ---
+    per_page = request.GET.get('per_page', 10) # Padrão de 10 itens por página
+    paginator = Paginator(solicitacoes_list, per_page)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    # --- FIM DA LÓGICA DE PAGINAÇÃO ---
+
     context = {
-        'solicitacoes': solicitacoes,
+        'solicitacoes': page_obj, # IMPORTANTE: Enviamos o objeto da página, não mais a lista completa
+        'per_page': per_page,
         'categorias_sc': CategoriaSC.objects.all().order_by('nome'),
-        'meses_opcoes': range(1, 13), # <-- ADICIONE ESTA LINHA
-        # Devolve os valores dos filtros para manter os campos preenchidos
-        'filtros_aplicados': {
-            'q': termo_busca,
-            'ano': ano,
-            'mes': mes,
-            'categoria': categoria_id,
-        }
+        'meses_opcoes': range(1, 13),
+        'filtros_aplicados': { 'q': termo_busca, 'ano': ano, 'mes': mes, 'categoria': categoria_id, },
+        'current_sort': sort_by,
+        'current_dir': direction,
     }
     
     return render(request, 'materiais/minhas_solicitacoes.html', context)
-# Lembre-se de ter essas importações no topo do seu views.py
 
 
 @login_required
@@ -620,25 +623,36 @@ def iniciar_recebimento(request, solicitacao_id):
 
 @login_required
 def historico_recebimentos(request):
-    if request.user.perfil != 'almoxarife_obra':
+    user = request.user
+    perfil = user.perfil
+
+    # PERMISSÃO AMPLIADA PARA ENGENHEIRO
+    if perfil not in ['almoxarife_obra', 'almoxarife_escritorio', 'diretor', 'engenheiro']:
         messages.error(request, 'Acesso negado.')
         return redirect('materiais:dashboard')
 
-    # CORREÇÃO: Busca os novos objetos 'Recebimento' criados pelo usuário logado
-    recebimentos_feitos = Recebimento.objects.filter(
-        recebedor=request.user
-    ).select_related('solicitacao__obra').prefetch_related('itens_recebidos').order_by('-data_recebimento')
+    if perfil in ['almoxarife_escritorio', 'diretor']:
+        base_query = Recebimento.objects.all()
+    else: # almoxarife_obra ou engenheiro
+        user_obras = user.obras.all()
+        base_query = Recebimento.objects.filter(solicitacao__obra__in=user_obras)
+    
+    materiais_recebidos = base_query.select_related(
+        'solicitacao__obra', 'recebedor'
+    ).prefetch_related(
+        'itens_recebidos__item_solicitado'
+    ).order_by('-data_recebimento')
 
     context = {
-        # O nome da variável no template ('materiais_recebidos') foi mantido para não quebrar o HTML
-        'materiais_recebidos': recebimentos_feitos
+        'materiais_recebidos': materiais_recebidos
     }
     return render(request, 'materiais/historico_recebimentos.html', context)
 
 
 @login_required
 def cadastrar_itens(request):
-    if request.user.perfil not in ['almoxarife_escritorio', 'diretor']:
+    # PERMISSÃO AMPLIADA PARA ENGENHEIRO
+    if request.user.perfil not in ['almoxarife_escritorio', 'diretor', 'engenheiro']:
         messages.error(request, 'Acesso negado. Apenas o escritório ou diretoria pode cadastrar itens.')
         return redirect('materiais:dashboard')
 
@@ -1245,19 +1259,17 @@ def duplicar_solicitacao(request, solicitacao_id):
 @login_required
 def api_solicitacao_detalhes(request, solicitacao_id):
     try:
-        # Adiciona 'destino' ao select_related para otimizar a busca
         solicitacao = SolicitacaoCompra.objects.select_related(
             'categoria_sc', 'solicitante', 'obra', 'destino'
         ).get(id=solicitacao_id)
         
-        # Adiciona o campo 'destino' na resposta da API
         dados = {
             'numero': solicitacao.numero,
             'status': solicitacao.get_status_display(),
             'nome_descritivo': solicitacao.nome_descritivo,
             'solicitante': solicitacao.solicitante.get_full_name() or solicitacao.solicitante.username,
             'obra': solicitacao.obra.nome,
-            'destino': solicitacao.destino.nome if solicitacao.destino else "Endereço da Obra", # NOVO
+            'destino': solicitacao.destino.nome if solicitacao.destino else "Endereço da Obra",
             'data_criacao': timezone.localtime(solicitacao.data_criacao).strftime('%d/%m/%Y'),
             'data_necessaria': solicitacao.data_necessidade.strftime('%d/%m/%Y'),
             'observacoes': solicitacao.justificativa,
@@ -1266,9 +1278,24 @@ def api_solicitacao_detalhes(request, solicitacao_id):
 
         itens = []
         for item in solicitacao.itens.all():
+            # --- LÓGICA DE SEPARAÇÃO DA CATEGORIA ---
+            categoria_principal = "-"
+            subcategoria = "-"
+            # O campo 'categoria' no seu modelo é um texto 'Pai -> Filho'
+            # Vamos separá-lo aqui
+            if ' -> ' in item.categoria:
+                parts = item.categoria.split(' -> ', 1)
+                categoria_principal = parts[0]
+                subcategoria = parts[1]
+            elif item.categoria:
+                categoria_principal = item.categoria
+
             itens.append({
-                'descricao': item.descricao, 'quantidade': f"{item.quantidade:g}",
-                'unidade': item.unidade, 'categoria': item.categoria or "Sem categoria"
+                'descricao': item.descricao, 
+                'quantidade': f"{item.quantidade:g}",
+                'unidade': item.unidade,
+                'categoria_principal': categoria_principal, # Novo campo
+                'subcategoria': subcategoria              # Novo campo
             })
         dados['itens'] = itens
 
@@ -1290,7 +1317,8 @@ def api_solicitacao_detalhes(request, solicitacao_id):
 # Adicione esta nova função ao seu arquivo materiais/views.py cadastrar_itens
 @login_required
 def gerenciar_categorias(request):
-    if request.user.perfil not in ['almoxarife_escritorio', 'diretor']:
+    # PERMISSÃO AMPLIADA PARA ENGENHEIRO
+    if request.user.perfil not in ['almoxarife_escritorio', 'diretor', 'engenheiro']:
         messages.error(request, 'Acesso negado.')
         return redirect('materiais:dashboard')
 
@@ -1391,16 +1419,27 @@ def escritorio_editar_sc(request, solicitacao_id):
 # Substitua sua função gerenciar_cotacoes por esta
 @login_required
 def gerenciar_cotacoes(request):
-    # Verificação de permissão já inclui o 'diretor'
     if request.user.perfil not in ['almoxarife_escritorio', 'diretor']:
         messages.error(request, 'Acesso negado.')
         return redirect('materiais:dashboard')
 
     base_query = SolicitacaoCompra.objects.order_by('-is_emergencial', 'data_criacao')
-    
     scs_para_iniciar = base_query.filter(status__in=['aprovada', 'aprovado_engenharia'])
+    
+    # --- LÓGICA DE IDENTIFICAÇÃO APRIMORADA ---
+    for sc in scs_para_iniciar:
+        itens = sc.itens.all()
+        count_agregados = 0
+        for item in itens:
+            if item.item_catalogo and item.item_catalogo.categoria and item.item_catalogo.categoria.categoria_mae:
+                if item.item_catalogo.categoria.categoria_mae.nome.lower() == 'agregados':
+                    count_agregados += 1
+        
+        sc.is_agregado = (itens.count() > 0 and count_agregados == itens.count())
+        sc.is_mista = (count_agregados > 0 and count_agregados < itens.count())
+    # --- FIM DA LÓGICA ---
+    
     scs_em_cotacao = base_query.filter(status='em_cotacao')
-
     base_aguardando_resposta = base_query.filter(status='aguardando_resposta').prefetch_related('envios_cotacao__fornecedor', 'cotacoes')
     scs_pendentes_resposta = base_aguardando_resposta.filter(cotacoes__isnull=True)
     scs_parcialmente_recebidas = base_aguardando_resposta.filter(cotacoes__isnull=False).distinct()
@@ -1930,108 +1969,157 @@ def api_get_itens_para_receber(request, solicitacao_id):
         return JsonResponse({'success': False, 'message': 'Solicitação não encontrada'}, status=404)
 
 
+from django.db.models import Q # Certifique-se de que esta importação está no topo do arquivo
+
 @login_required
 def registrar_recebimento(request):
-    # Lógica para processar o formulário de recebimento (POST)
-    if request.method == 'POST':
-        if request.user.perfil != 'almoxarife_obra':
-            messages.error(request, 'Acesso negado.')
-            return redirect('materiais:dashboard')
+    user = request.user
+    perfil = user.perfil
+
+    if perfil not in ['almoxarife_obra', 'almoxarife_escritorio', 'diretor', 'engenheiro']:
+        messages.error(request, 'Acesso negado.')
+        return redirect('materiais:dashboard')
         
+    search_query = request.GET.get('q', '').strip()
+
+    if perfil in ['almoxarife_escritorio', 'diretor']:
+        base_query = SolicitacaoCompra.objects.filter(status__in=['a_caminho', 'recebida_parcial'])
+    else: 
+        user_obras = user.obras.all()
+        base_query = SolicitacaoCompra.objects.filter(
+            obra__in=user_obras,
+            status__in=['a_caminho', 'recebida_parcial']
+        )
+    
+    # Otimiza a consulta para buscar todos os dados de uma vez
+    base_query = base_query.select_related(
+        'obra', 
+        'requisicao__cotacao_vencedora__fornecedor'
+    ).prefetch_related(
+        'itens__recebimentos'  # Pré-busca os itens e seus recebimentos
+    ).distinct()
+
+    if search_query:
+        base_query = base_query.filter(
+            Q(numero__icontains=search_query) |
+            Q(itens__descricao__icontains=search_query) |
+            Q(requisicao__cotacao_vencedora__fornecedor__nome_fantasia__icontains=search_query)
+        )
+
+    # Função interna para processar as SCs
+    def processar_solicitacoes(solicitacoes):
+        for sc in solicitacoes:
+            itens_pendentes = []
+            sc.itens_completos = 0
+            sc.total_itens = sc.itens.count()
+
+            for item in sc.itens.all():
+                # Acessa os recebimentos pré-buscados em memória, sem nova consulta
+                total_recebido = sum(rec.quantidade_recebida for rec in item.recebimentos.all())
+                
+                if total_recebido < item.quantidade:
+                    item.quantidade_pendente = item.quantidade - total_recebido
+                    itens_pendentes.append(item)
+                else:
+                    sc.itens_completos += 1
+            
+            sc.itens_pendentes = itens_pendentes
+            try:
+                sc.fornecedor = sc.requisicao.cotacao_vencedora.fornecedor.nome_fantasia
+            except:
+                sc.fornecedor = "Não encontrado"
+        return solicitacoes
+
+    scs_a_receber = processar_solicitacoes(base_query.filter(status='a_caminho').order_by('data_criacao'))
+    scs_parciais = processar_solicitacoes(base_query.filter(status='recebida_parcial').order_by('data_criacao'))
+
+    context = {
+        'scs_a_receber': scs_a_receber,
+        'scs_parciais': scs_parciais,
+        'search_query': search_query,
+    }
+    return render(request, 'materiais/registrar_recebimento.html', context)
+
+@login_required
+def iniciar_recebimento(request, solicitacao_id):
+    solicitacao = get_object_or_404(SolicitacaoCompra, id=solicitacao_id)
+    user = request.user
+    perfil = user.perfil
+
+    # PERMISSÃO AMPLIADA PARA ENGENHEIRO
+    if perfil not in ['almoxarife_obra', 'almoxarife_escritorio', 'diretor', 'engenheiro']:
+        messages.error(request, 'Você não tem permissão para acessar esta página.')
+        return redirect('materiais:dashboard')
+    
+    # Se for Almoxarife de Obra OU Engenheiro, verifica se a SC pertence a uma de suas obras
+    if perfil in ['almoxarife_obra', 'engenheiro'] and solicitacao.obra not in user.obras.all():
+        messages.error(request, 'Acesso negado a esta solicitação.')
+        return redirect('materiais:registrar_recebimento')
+    
+    if request.method == 'POST':
         try:
             with transaction.atomic():
-                solicitacao_id = request.POST.get('solicitacao_id')
-                sc = get_object_or_404(SolicitacaoCompra, id=solicitacao_id)
-                
-                # 1. Cria o registro do evento de recebimento
                 novo_recebimento = Recebimento.objects.create(
-                    solicitacao=sc,
+                    solicitacao=solicitacao,
                     recebedor=request.user,
                     observacoes=request.POST.get('observacoes', ''),
                     nota_fiscal=request.FILES.get('nota_fiscal'),
                     sc_assinada=request.FILES.get('sc_assinada'),
                     boleto_comprovante=request.FILES.get('boleto_comprovante')
                 )
-
-                # 2. Cria os registros para cada item recebido no formulário atual
                 itens_selecionados_ids = request.POST.getlist('itens_selecionados')
                 for item_id in itens_selecionados_ids:
                     quantidade_str = request.POST.get(f'quantidade_recebida_{item_id}')
                     if quantidade_str and float(quantidade_str) > 0:
                         ItemRecebido.objects.create(
-                            recebimento=novo_recebimento,
-                            item_solicitado_id=item_id,
+                            recebimento=novo_recebimento, item_solicitado_id=item_id,
                             quantidade_recebida=float(quantidade_str),
                             observacoes=request.POST.get(f'observacoes_{item_id}', '')
                         )
 
-                # 3. VERIFICA O STATUS GERAL DA SC (LÓGICA CORRIGIDA E ROBUSTA)
-                total_itens_sc = sc.itens.count()
+                total_itens_sc = solicitacao.itens.count()
                 itens_completos = 0
-                for item_solicitado in sc.itens.all():
-                    # Soma tudo que já foi recebido para este item em TODOS os recebimentos
-                    total_recebido_do_item = item_solicitado.recebimentos.aggregate(
-                        total=Sum('quantidade_recebida')
-                    )['total'] or 0
-                    
+                for item_solicitado in solicitacao.itens.all():
+                    total_recebido_do_item = item_solicitado.recebimentos.aggregate(total=Sum('quantidade_recebida'))['total'] or 0
                     if total_recebido_do_item >= item_solicitado.quantidade:
                         itens_completos += 1
                 
-                # Decide o novo status da SC
                 if itens_completos == total_itens_sc:
-                    sc.status = 'recebida'
+                    solicitacao.status = 'recebida'
                     acao_historico = "Material Recebido (Total)"
                 else:
-                    sc.status = 'recebida_parcial'
+                    solicitacao.status = 'recebida_parcial'
                     acao_historico = "Material Recebido (Parcial)"
-                
-                sc.save()
+                solicitacao.save()
 
-                # 4. Cria registro no histórico
                 HistoricoSolicitacao.objects.create(
-                    solicitacao=sc, usuario=request.user, acao=acao_historico,
-                    detalhes=f"Recebimento de {len(itens_selecionados_ids)} item(ns) registrado por {request.user.get_full_name()}."
+                    solicitacao=solicitacao, usuario=request.user, acao=acao_historico,
+                    detalhes=f"Recebimento de {len(itens_selecionados_ids)} item(ns) registrado."
                 )
                 
-                messages.success(request, f'Recebimento da SC {sc.numero} registrado com sucesso!')
+                messages.success(request, f'Recebimento da SC {solicitacao.numero} registrado com sucesso!')
                 return redirect('materiais:registrar_recebimento')
-
         except Exception as e:
             messages.error(request, f'Ocorreu um erro ao registrar o recebimento: {e}')
-    
-    # Lógica para exibir a página/dashboard de recebimentos (GET)
-    if request.user.perfil != 'almoxarife_obra':
-        messages.error(request, 'Acesso negado.')
-        return redirect('materiais:dashboard')
-        
-    user_obras = request.user.obras.all()
-    
-    # Lista de SCs aguardando a primeira entrega
-    scs_a_receber = SolicitacaoCompra.objects.filter(
-        obra__in=user_obras,
-        status='a_caminho'
-    ).order_by('data_criacao')
-    
-    # Lista de SCs com entregas parciais
-    scs_parciais = SolicitacaoCompra.objects.filter(
-        obra__in=user_obras,
-        status='recebida_parcial'
-    ).order_by('data_criacao')
 
-    # Adiciona informações de progresso para as SCs parciais
-    for sc in scs_parciais:
-        sc.total_itens = sc.itens.count()
-        sc.itens_completos = 0
-        for item in sc.itens.all():
-            total_recebido = item.recebimentos.aggregate(total=Sum('quantidade_recebida'))['total'] or 0
-            if total_recebido >= item.quantidade:
-                sc.itens_completos += 1
-
+    itens_pendentes = []
+    for item in solicitacao.itens.all():
+        total_recebido = item.recebimentos.aggregate(total=Sum('quantidade_recebida'))['total'] or 0
+        quantidade_pendente = item.quantidade - total_recebido
+        if quantidade_pendente > 0:
+            itens_pendentes.append({
+                'id': item.id,
+                'descricao': item.descricao,
+                'quantidade_solicitada': f"{item.quantidade:g}",
+                'quantidade_pendente': f"{quantidade_pendente:g}",
+                'unidade': item.unidade,
+            })
+    
     context = {
-        'scs_a_receber': scs_a_receber,
-        'scs_parciais': scs_parciais,
+        'sc': solicitacao,
+        'itens_para_receber': itens_pendentes,
     }
-    return render(request, 'materiais/registrar_recebimento.html', context)
+    return render(request, 'materiais/iniciar_recebimento.html', context)
 
 @login_required
 def editar_solicitacao_analise(request, solicitacao_id):
@@ -2189,3 +2277,160 @@ def excluir_categoria_item(request, categoria_id):
             messages.error(request, f"Ocorreu um erro ao tentar excluir: {e}")
 
     return redirect('materiais:gerenciar_categorias')
+
+@login_required
+def cotacao_agregado(request, solicitacao_id):
+    sc_mae = get_object_or_404(SolicitacaoCompra, id=solicitacao_id)
+    
+    if request.user.perfil not in ['almoxarife_escritorio', 'diretor']:
+        messages.error(request, "Acesso negado.")
+        return redirect('materiais:gerenciar_cotacoes')
+    
+    item_solicitado = sc_mae.itens.first()
+    is_agregado_valido = False
+    if item_solicitado and item_solicitado.item_catalogo and item_solicitado.item_catalogo.categoria and item_solicitado.item_catalogo.categoria.categoria_mae:
+        if item_solicitado.item_catalogo.categoria.categoria_mae.nome.lower() == 'agregados':
+            is_agregado_valido = True
+
+    if not is_agregado_valido:
+        messages.error(request, "Esta solicitação não é válida para o fluxo de agregados.")
+        return redirect('materiais:gerenciar_cotacoes')
+
+    if request.method == 'POST':
+        try:
+            fornecedor_id = request.POST.get('fornecedor')
+            
+            # --- LINHA CORRIGIDA ---
+            # O valor já vem no formato "8.33" do frontend, não precisa de limpeza.
+            preco_unitario_str = request.POST.get('preco_unitario', '0')
+            
+            quantidade_total = Decimal(request.POST.get('quantidade_total'))
+            quantidade_particao = Decimal(request.POST.get('quantidade_particao'))
+            
+            fornecedor = get_object_or_404(Fornecedor, id=fornecedor_id)
+            preco_unitario = Decimal(preco_unitario_str)
+            
+            if quantidade_particao <= 0 or quantidade_total <= 0:
+                raise ValueError("Quantidades devem ser maiores que zero.")
+
+            num_particoes = int(quantidade_total / quantidade_particao)
+            
+            with transaction.atomic():
+                sc_mae.status = 'em_cotacao'
+                sc_mae.save()
+
+                for i in range(num_particoes):
+                    sc_filha = SolicitacaoCompra.objects.create(
+                        solicitante=sc_mae.solicitante, obra=sc_mae.obra,
+                        data_necessidade=sc_mae.data_necessidade,
+                        justificativa=f"Entrega {i+1}/{num_particoes} do pedido original {sc_mae.numero}.",
+                        status='aprovada',
+                        aprovador=request.user, data_aprovacao=timezone.now(),
+                        sc_mae=sc_mae
+                    )
+                    item_filho = ItemSolicitacao.objects.create(
+                        solicitacao=sc_filha, item_catalogo=item_solicitado.item_catalogo,
+                        descricao=item_solicitado.descricao, unidade=item_solicitado.unidade,
+                        categoria=item_solicitado.categoria, quantidade=quantidade_particao
+                    )
+                    cotacao = Cotacao.objects.create(
+                        solicitacao=sc_filha, fornecedor=fornecedor,
+                        vencedora=True, data_cotacao=timezone.now()
+                    )
+                    ItemCotacao.objects.create(
+                        cotacao=cotacao, item_solicitacao=item_filho, preco=preco_unitario
+                    )
+                    
+                    RequisicaoMaterial.objects.create(
+                        solicitacao_origem=sc_filha, 
+                        cotacao_vencedora=cotacao,
+                        valor_total=preco_unitario * quantidade_particao
+                    )
+
+                    sc_filha.status = 'finalizada'
+                    sc_filha.save()
+            
+            sc_mae.status = 'finalizada'
+            sc_mae.save()
+
+            messages.success(request, f"{num_particoes} RMs de agregado foram geradas com sucesso para a SC {sc_mae.numero}.")
+            return redirect('materiais:gerenciar_requisicoes')
+
+        except Exception as e:
+            messages.error(request, f"Erro ao processar o pedido: {e}")
+
+    context = {
+        'solicitacao': sc_mae,
+        'item': item_solicitado,
+        'fornecedores': Fornecedor.objects.filter(ativo=True).order_by('nome_fantasia'),
+    }
+    return render(request, 'materiais/cotacao_agregado.html', context)
+
+@login_required
+def dividir_solicitacao_agregado(request, solicitacao_id):
+    """
+    Esta view identifica itens de agregado em uma SC mista,
+    cria uma nova SC filha apenas com eles, e redireciona para o fluxo simplificado.
+    """
+    if request.user.perfil not in ['almoxarife_escritorio', 'diretor']:
+        messages.error(request, "Acesso negado.")
+        return redirect('materiais:gerenciar_cotacoes')
+
+    sc_original = get_object_or_404(SolicitacaoCompra, id=solicitacao_id)
+
+    itens_agregados = []
+    itens_comuns = []
+
+    for item in sc_original.itens.all():
+        is_agregado = False
+        if item.item_catalogo and item.item_catalogo.categoria and item.item_catalogo.categoria.categoria_mae:
+            if item.item_catalogo.categoria.categoria_mae.nome.lower() == 'agregados':
+                is_agregado = True
+        
+        if is_agregado:
+            itens_agregados.append(item)
+        else:
+            itens_comuns.append(item)
+
+    # Se não houver itens de agregado ou comuns, não há o que dividir.
+    if not itens_agregados or not itens_comuns:
+        messages.warning(request, "Esta solicitação não precisa ser dividida.")
+        return redirect('materiais:gerenciar_cotacoes')
+
+    try:
+        with transaction.atomic():
+            # 1. Cria a nova SC filha para os agregados
+            sc_filha_agregado = SolicitacaoCompra.objects.create(
+                solicitante=sc_original.solicitante,
+                obra=sc_original.obra,
+                data_necessidade=sc_original.data_necessidade,
+                justificativa=f"Itens de agregado separados da SC original {sc_original.numero}.",
+                status='aprovada', # Já nasce pronta para o fluxo de agregado
+                aprovador=request.user,
+                data_aprovacao=timezone.now(),
+                sc_mae=sc_original # Vincula à SC original
+            )
+
+            # 2. Move os itens de agregado da SC original para a nova SC filha
+            for item_agregado in itens_agregados:
+                item_agregado.solicitacao = sc_filha_agregado
+                item_agregado.save()
+            
+            # 3. Adiciona histórico em ambas as SCs
+            HistoricoSolicitacao.objects.create(
+                solicitacao=sc_original, usuario=request.user, acao="SC Dividida",
+                detalhes=f"Itens de agregado foram movidos para a nova SC {sc_filha_agregado.numero}."
+            )
+            HistoricoSolicitacao.objects.create(
+                solicitacao=sc_filha_agregado, usuario=request.user, acao="Criação por Divisão",
+                detalhes=f"Originada da SC mista {sc_original.numero}."
+            )
+
+            messages.success(request, f"A SC {sc_original.numero} foi dividida. Os itens de agregado estão na nova SC {sc_filha_agregado.numero}.")
+            
+            # 4. Redireciona para o fluxo simplificado da SC de agregado recém-criada
+            return redirect('materiais:cotacao_agregado', solicitacao_id=sc_filha_agregado.id)
+
+    except Exception as e:
+        messages.error(request, f"Ocorreu um erro ao tentar dividir a solicitação: {e}")
+        return redirect('materiais:gerenciar_cotacoes')

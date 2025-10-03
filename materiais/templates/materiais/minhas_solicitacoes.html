@@ -6,12 +6,13 @@
 {% block content %}
 <style>
     {% include 'materiais/styles_dashboard.css' %}
+    .sortable a { text-decoration: none; color: inherit; font-weight: bold; }
+    .sortable a:hover { color: #0d6efd; }
+    .sort-icon { display: inline-block; width: 1em; text-align: center; color: #0d6efd; }
 </style>
 
 <div class="d-flex align-items-center mb-3">
-    <a href="{% url 'materiais:dashboard' %}" class="btn btn-secondary me-3">
-        <i class="fas fa-arrow-left"></i> Voltar
-    </a>
+    <a href="{% url 'materiais:dashboard' %}" class="btn btn-secondary me-3"><i class="fas fa-arrow-left"></i> Voltar</a>
     <div>
         <h4 class="mb-0">Minhas Solicitações</h4>
         <p class="text-muted mb-0">Veja e acompanhe todas as solicitações que você criou.</p>
@@ -23,35 +24,11 @@
     <div class="card-body bg-light">
         <form method="GET" action="{% url 'materiais:minhas_solicitacoes' %}">
             <div class="row g-3 align-items-end">
-                <div class="col-md-4">
-                    <label for="q" class="form-label">Pesquisa Rápida</label>
-                    <input type="text" name="q" id="q" class="form-control" value="{{ filtros_aplicados.q }}" placeholder="Código, item, obra...">
-                </div>
-                <div class="col-md-2">
-                    <label for="ano" class="form-label">Ano</label>
-                    <input type="number" name="ano" id="ano" class="form-control" value="{{ filtros_aplicados.ano }}" placeholder="Ex: 2025">
-                </div>
-                <div class="col-md-2">
-                    <label for="mes" class="form-label">Mês</label>
-                    <select name="mes" id="mes" class="form-select">
-                        <option value="">Todos</option>
-                        {% for mes_num in meses_opcoes %}
-                        <option value="{{ mes_num }}" {% if filtros_aplicados.mes == mes_num|stringformat:"s" %}selected{% endif %}>{{ mes_num }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="col-md-2">
-                    <label for="categoria" class="form-label">Categoria</label>
-                    <select name="categoria" id="categoria" class="form-select">
-                        <option value="">Todas</option>
-                        {% for cat in categorias_sc %}
-                        <option value="{{ cat.id }}" {% if filtros_aplicados.categoria == cat.id|stringformat:"s" %}selected{% endif %}>{{ cat.nome }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="col-md-2">
-                    <button type="submit" class="btn btn-primary w-100"><i class="fas fa-search"></i> Filtrar</button>
-                </div>
+                <div class="col-md-4"><label for="q" class="form-label">Pesquisa Rápida</label><input type="text" name="q" id="q" class="form-control" value="{{ filtros_aplicados.q }}" placeholder="Código, item, obra..."></div>
+                <div class="col-md-2"><label for="ano" class="form-label">Ano</label><input type="number" name="ano" id="ano" class="form-control" value="{{ filtros_aplicados.ano }}" placeholder="Ex: 2025"></div>
+                <div class="col-md-2"><label for="mes" class="form-label">Mês</label><select name="mes" id="mes" class="form-select"><option value="">Todos</option>{% for mes_num in meses_opcoes %}<option value="{{ mes_num }}" {% if filtros_aplicados.mes == mes_num|stringformat:"s" %}selected{% endif %}>{{ mes_num }}</option>{% endfor %}</select></div>
+                <div class="col-md-2"><label for="categoria" class="form-label">Categoria</label><select name="categoria" id="categoria" class="form-select"><option value="">Todas</option>{% for cat in categorias_sc %}<option value="{{ cat.id }}" {% if filtros_aplicados.categoria == cat.id|stringformat:"s" %}selected{% endif %}>{{ cat.nome }}</option>{% endfor %}</select></div>
+                <div class="col-md-2"><button type="submit" class="btn btn-primary w-100"><i class="fas fa-search"></i> Filtrar</button></div>
             </div>
         </form>
     </div>
@@ -59,29 +36,65 @@
 
 <div class="card">
     <div class="card-body">
+
+        <div class="d-flex justify-content-end mb-3">
+            <form method="GET" action="" class="d-flex align-items-center">
+                <input type="hidden" name="q" value="{{ filtros_aplicados.q }}">
+                <input type="hidden" name="ano" value="{{ filtros_aplicados.ano }}">
+                <input type="hidden" name="mes" value="{{ filtros_aplicados.mes }}">
+                <input type="hidden" name="categoria" value="{{ filtros_aplicados.categoria }}">
+                <input type="hidden" name="sort" value="{{ current_sort }}">
+                <input type="hidden" name="dir" value="{{ current_dir }}">
+                <label for="per_page" class="form-label me-2 mb-0">Mostrar:</label>
+                <select name="per_page" id="per_page" class="form-select form-select-sm" style="width: auto;" onchange="this.form.submit()">
+                    <option value="10" {% if per_page == '10' %}selected{% endif %}>10</option>
+                    <option value="25" {% if per_page == '25' %}selected{% endif %}>25</option>
+                    <option value="50" {% if per_page == '50' %}selected{% endif %}>50</option>
+                    <option value="100" {% if per_page == '100' %}selected{% endif %}>100</option>
+                </select>
+            </form>
+        </div>
+
         {% if solicitacoes %}
             <div class="table-responsive">
                 <table class="table table-hover align-middle">
                     <thead>
                         <tr>
-                            <th>Código</th>
+                            {% with base_url=request.path url_params=request.GET.urlencode|remove_param:'sort,dir' %}
+                            <th class="sortable">
+                                <a href="{{ base_url }}?sort=codigo&dir={% if current_sort == 'codigo' and current_dir == 'asc' %}desc{% else %}asc{% endif %}&{{ url_params }}">
+                                    Código <span class="sort-icon">{% if current_sort == 'codigo' %}{% if current_dir == 'asc' %}&#9650;{% else %}&#9660;{% endif %}{% endif %}</span>
+                                </a>
+                            </th>
                             <th>Nome</th>
-                            <th>Obra</th>
-                            <th>Data Criação</th>
-                            <th>Status</th>
-                            <th>Itens</th>
+                            <th class="sortable">
+                                <a href="{{ base_url }}?sort=obra&dir={% if current_sort == 'obra' and current_dir == 'asc' %}desc{% else %}asc{% endif %}&{{ url_params }}">
+                                    Obra <span class="sort-icon">{% if current_sort == 'obra' %}{% if current_dir == 'asc' %}&#9650;{% else %}&#9660;{% endif %}{% endif %}</span>
+                                </a>
+                            </th>
+                            <th class="sortable">
+                                <a href="{{ base_url }}?sort=data_criacao&dir={% if current_sort == 'data_criacao' and current_dir == 'asc' %}desc{% else %}asc{% endif %}&{{ url_params }}">
+                                    Data Criação <span class="sort-icon">{% if current_sort == 'data_criacao' or not current_sort %}{% if current_dir == 'asc' %}&#9650;{% else %}&#9660;{% endif %}{% endif %}</span>
+                                </a>
+                            </th>
+                            <th class="sortable">
+                                <a href="{{ base_url }}?sort=status&dir={% if current_sort == 'status' and current_dir == 'asc' %}desc{% else %}asc{% endif %}&{{ url_params }}">
+                                    Status <span class="sort-icon">{% if current_sort == 'status' %}{% if current_dir == 'asc' %}&#9650;{% else %}&#9660;{% endif %}{% endif %}</span>
+                                </a>
+                            </th>
+                            <th class="sortable">
+                                <a href="{{ base_url }}?sort=itens&dir={% if current_sort == 'itens' and current_dir == 'asc' %}desc{% else %}asc{% endif %}&{{ url_params }}">
+                                    Itens <span class="sort-icon">{% if current_sort == 'itens' %}{% if current_dir == 'asc' %}&#9650;{% else %}&#9660;{% endif %}{% endif %}</span>
+                                </a>
+                            </th>
                             <th>Ações</th>
+                            {% endwith %}
                         </tr>
                     </thead>
                     <tbody>
                         {% for solicitacao in solicitacoes %}
                         <tr>
-                            <td>
-                                {% if solicitacao.is_emergencial %}
-                                    <i class="fas fa-exclamation-triangle text-danger me-2" title="Solicitação Emergencial"></i>
-                                {% endif %}
-                                {{ solicitacao.numero }}
-                            </td>
+                            <td>{{ solicitacao.numero }}</td>
                             <td><strong>{{ solicitacao.nome_descritivo }}</strong></td>
                             <td>{{ solicitacao.obra.nome|default:"-" }}</td>
                             <td>{{ solicitacao.data_criacao|date:"d/m/Y H:i" }}</td>
@@ -91,18 +104,15 @@
                                 {% elif solicitacao.status == 'em_cotacao' or solicitacao.status == 'aguardando_resposta' or solicitacao.status == 'cotacao_selecionada' %}<span class="status-badge badge-cotacao">{{ solicitacao.get_status_display }}</span>
                                 {% elif solicitacao.status == 'finalizada' %}<span class="status-badge badge-finalizada">{{ solicitacao.get_status_display }}</span>
                                 {% elif solicitacao.status == 'a_caminho' %}<span class="status-badge badge-caminho">{{ solicitacao.get_status_display }}</span>
-                                {% elif solicitacao.status == 'recebida' %}<span class="status-badge badge-entregue">{{ solicitacao.get_status_display }}</span>
+                                {% elif solicitacao.status == 'recebida' or solicitacao.status == 'recebida_parcial' %}<span class="status-badge badge-entregue">{{ solicitacao.get_status_display }}</span>
                                 {% elif solicitacao.status == 'rejeitada' %}<span class="status-badge badge-rejeitada">{{ solicitacao.get_status_display }}</span>
                                 {% else %}<span class="badge bg-secondary">{{ solicitacao.get_status_display }}</span>{% endif %}
                             </td>
                             <td>
-                                <span class="badge bg-light text-dark border">{{ solicitacao.itens.count }} item{{ solicitacao.itens.count|pluralize:"s" }}</span>
+                                <span class="badge bg-light text-dark border">{{ solicitacao.item_count }} item{{ solicitacao.item_count|pluralize:"s" }}</span>
                             </td>
                             <td>
-                                <button class="btn btn-sm btn-outline-primary btn-ver-detalhes" 
-                                        data-bs-toggle="modal" 
-                                        data-bs-target="#modalDetalhesSC"
-                                        data-sc-id="{{ solicitacao.id }}">
+                                <button class="btn btn-sm btn-outline-primary btn-ver-detalhes" data-bs-toggle="modal" data-bs-target="#modalDetalhesSC" data-sc-id="{{ solicitacao.id }}">
                                     <i class="fas fa-eye"></i> Ver Detalhes
                                 </button>
                             </td>
@@ -111,6 +121,25 @@
                     </tbody>
                 </table>
             </div>
+
+            <nav>
+                <ul class="pagination justify-content-center">
+                    {% if solicitacoes.has_previous %}
+                        <li class="page-item"><a class="page-link" href="?page=1&{{ request.GET.urlencode|remove_param:'page' }}">Primeira</a></li>
+                        <li class="page-item"><a class="page-link" href="?page={{ solicitacoes.previous_page_number }}&{{ request.GET.urlencode|remove_param:'page' }}">Anterior</a></li>
+                    {% endif %}
+
+                    <li class="page-item active" aria-current="page">
+                        <span class="page-link">Página {{ solicitacoes.number }} de {{ solicitacoes.paginator.num_pages }}</span>
+                    </li>
+
+                    {% if solicitacoes.has_next %}
+                        <li class="page-item"><a class="page-link" href="?page={{ solicitacoes.next_page_number }}&{{ request.GET.urlencode|remove_param:'page' }}">Próxima</a></li>
+                        <li class="page-item"><a class="page-link" href="?page={{ solicitacoes.paginator.num_pages }}&{{ request.GET.urlencode|remove_param:'page' }}">Última</a></li>
+                    {% endif %}
+                </ul>
+            </nav>
+
         {% else %}
             <div class="text-center p-5">
                 <i class="fas fa-inbox fa-3x text-muted mb-3"></i>

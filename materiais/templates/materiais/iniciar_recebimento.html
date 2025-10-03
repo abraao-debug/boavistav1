@@ -1,0 +1,254 @@
+{% extends 'materiais/base.html' %}
+{% block title %}Receber SC {{ sc.numero }}{% endblock %}
+
+{% block content %}
+<style>
+    {% include 'materiais/styles_dashboard.css' %}
+    .upload-box { border: 2px dashed #dee2e6; border-radius: .375rem; padding: 2rem; text-align: center; cursor: pointer; transition: all 0.2s ease-in-out; background-color: #f8f9fa; }
+    .upload-box:hover { background-color: #e9ecef; border-color: #0d6efd; }
+    .upload-box.is-invalid { border-color: #dc3545; }
+    .file-name { font-weight: bold; color: #0d6efd; margin-top: 0.5rem; display: block; }
+    .item-card.selected { background-color: #e6f7ff; border-color: #b8daff; }
+</style>
+
+<div class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-11">
+            <div class="d-flex align-items-center mb-4">
+                <a href="{% url 'materiais:registrar_recebimento' %}" class="btn btn-secondary me-3"><i class="fas fa-arrow-left"></i> Voltar</a>
+                <div>
+                    <h4 class="mb-0">Registrar Recebimento: <span class="text-primary">{{ sc.numero }}</span></h4>
+                    <p class="text-muted mb-0">{{ sc.obra.nome }}</p>
+                </div>
+            </div>
+
+            <form method="POST" enctype="multipart/form-data" id="form-recebimento">
+                {% csrf_token %}
+                <input type="hidden" name="solicitacao_id" value="{{ sc.id }}">
+
+                <div class="card" id="itens-container">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Selecionar Itens Recebidos</h5>
+                        <div>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-selecionar-todos">Selecionar Todos</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-desmarcar-todos">Desmarcar Todos</button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div id="lista-itens-receber">
+                            {% for item in itens_para_receber %}
+                            <div class="card mb-2 item-row" data-item-id="{{ item.id }}" data-descricao="{{ item.descricao }}" data-pendente="{{ item.quantidade_pendente }}">
+                                <div class="card-body">
+                                    <div class="row align-items-center">
+                                        <div class="col-1"><input class="form-check-input item-checkbox" type="checkbox" name="itens_selecionados" value="{{ item.id }}"></div>
+                                        <div class="col-4">
+                                            <strong>{{ item.descricao }}</strong>
+                                            <div class="text-muted small">Solicitado: {{ item.quantidade_solicitada }} {{ item.unidade }}</div>
+                                        </div>
+                                        <div class="col-2"><small class="text-muted">Pendente: {{ item.quantidade_pendente }}</small></div>
+                                        <div class="col-2"><input type="number" name="quantidade_recebida_{{ item.id }}" class="form-control form-control-sm item-quantidade" placeholder="Qtd." step="0.01" max="{{ item.quantidade_pendente }}" min="0" disabled></div>
+                                        <div class="col-3"><input type="text" name="observacoes_{{ item.id }}" class="form-control form-control-sm" placeholder="Obs. do item"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% empty %}
+                            <p class="text-center text-success p-4"><strong><i class="fas fa-check-circle"></i> Todos os itens desta SC já foram recebidos.</strong></p>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mt-4">
+                    <div class="card-header"><h5 class="mb-0">Documentos (Opcional)</h5></div>
+                    <div class="card-body">
+                         <div class="row">
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">Nota Fiscal</label>
+                                <div class="upload-box" onclick="this.querySelector('input').click()">
+                                    <input type="file" name="nota_fiscal" class="d-none" onchange="updateFileName(this)" accept="image/*,application/pdf">
+                                    <p><i class="fas fa-upload fa-2x text-muted"></i></p>
+                                    <p class="upload-text">Clique para anexar a nota fiscal</p>
+                                    <span class="file-name"></span>
+                                </div>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">SC Assinada</label>
+                                <div class="upload-box" onclick="this.querySelector('input').click()">
+                                    <input type="file" name="sc_assinada" class="d-none" onchange="updateFileName(this)" accept="image/*,application/pdf">
+                                    <p><i class="fas fa-upload fa-2x text-muted"></i></p>
+                                    <p class="upload-text">Clique para anexar a SC assinada</p>
+                                    <span class="file-name"></span>
+                                </div>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">Boleto/Comprovante</label>
+                                <div class="upload-box" onclick="this.querySelector('input').click()">
+                                    <input type="file" name="boleto_comprovante" class="d-none" onchange="updateFileName(this)" accept="image/*,application/pdf">
+                                    <p><i class="fas fa-upload fa-2x text-muted"></i></p>
+                                    <p class="upload-text">Clique para anexar o boleto</p>
+                                    <span class="file-name"></span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="observacoes" class="form-label">Observações Gerais do Recebimento</label>
+                            <textarea name="observacoes" id="observacoes" class="form-control" rows="3"></textarea>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="text-end mt-3">
+                    <a href="{% url 'materiais:registrar_recebimento' %}" class="btn btn-light border">Cancelar</a>
+                    <button type="submit" id="btn-confirmar" class="btn btn-success" disabled>
+                        Confirmar Recebimento (0 itens)
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="partialReceiptModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title"><i class="fas fa-exclamation-triangle"></i> Atenção: Recebimento Parcial</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Você não marcou todos os itens ou não preencheu a quantidade total para alguns deles. Os seguintes itens permanecerão pendentes:</p>
+                <ul id="pending-items-list" class="list-group">
+                    </ul>
+                <p class="mt-3"><strong>Deseja confirmar o recebimento parcial?</strong> A solicitação continuará disponível para futuros recebimentos.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-warning" id="confirm-partial-receipt-btn">Sim, Receber Parcialmente</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block javascript %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const form = document.getElementById('form-recebimento');
+    const itensList = document.getElementById('lista-itens-receber');
+    const btnConfirmar = document.getElementById('btn-confirmar');
+    const partialReceiptModalEl = document.getElementById('partialReceiptModal');
+    const partialReceiptModal = new bootstrap.Modal(partialReceiptModalEl);
+
+    function updateSubmitButtonState() {
+        const count = itensList.querySelectorAll('.item-checkbox:checked').length;
+        btnConfirmar.textContent = `Confirmar Recebimento (${count} item${count !== 1 ? 's' : ''})`;
+        btnConfirmar.disabled = count === 0;
+    }
+
+    itensList.addEventListener('change', function(e) {
+        if (e.target.classList.contains('item-checkbox')) {
+            const itemRow = e.target.closest('.item-row');
+            const quantidadeInput = itemRow.querySelector('.item-quantidade');
+            if (e.target.checked) {
+                itemRow.classList.add('selected');
+                quantidadeInput.disabled = false;
+                quantidadeInput.required = true;
+            } else {
+                itemRow.classList.remove('selected');
+                quantidadeInput.disabled = true;
+                quantidadeInput.required = false;
+                quantidadeInput.value = '';
+                quantidadeInput.classList.remove('is-invalid');
+            }
+            updateSubmitButtonState();
+        }
+    });
+
+    document.getElementById('btn-selecionar-todos').addEventListener('click', () => {
+        itensList.querySelectorAll('.item-checkbox:not(:checked)').forEach(cb => {
+            cb.checked = true;
+            cb.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+    });
+
+    document.getElementById('btn-desmarcar-todos').addEventListener('click', () => {
+        itensList.querySelectorAll('.item-checkbox:checked').forEach(cb => {
+            cb.checked = false;
+            cb.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+    });
+
+    form.addEventListener('submit', function(event) {
+        event.preventDefault();
+        validateAndConfirmSubmission();
+    });
+
+    function validateAndConfirmSubmission() {
+        let errors = [];
+        let partialItems = [];
+        let unselectedItems = [];
+
+        const checkedItems = form.querySelectorAll('.item-checkbox:checked');
+        if (checkedItems.length === 0) {
+            alert('Selecione pelo menos um item para registrar o recebimento.');
+            return;
+        }
+
+        checkedItems.forEach(checkbox => {
+            const itemRow = checkbox.closest('.item-row');
+            const qtyInput = itemRow.querySelector('.item-quantidade');
+            if (!qtyInput.value || parseFloat(qtyInput.value) <= 0) {
+                errors.push(`- Informe uma quantidade válida para: "${itemRow.dataset.descricao}".`);
+                qtyInput.classList.add('is-invalid');
+            }
+        });
+
+        if (errors.length > 0) {
+            alert('Por favor, corrija os seguintes erros:\n\n' + errors.join('\n'));
+            return;
+        }
+
+        form.querySelectorAll('.item-row').forEach(itemRow => {
+            const checkbox = itemRow.querySelector('.item-checkbox');
+            if (!checkbox.checked) {
+                unselectedItems.push(itemRow.dataset.descricao);
+            } else {
+                const qtyInput = itemRow.querySelector('.item-quantidade');
+                const qtyReceived = parseFloat(qtyInput.value) || 0;
+                const qtyPending = parseFloat(itemRow.dataset.pendente);
+                if (qtyReceived < qtyPending) {
+                    partialItems.push(`${itemRow.dataset.descricao} (recebendo ${qtyReceived} de ${qtyPending})`);
+                }
+            }
+        });
+
+        const allPendingItems = unselectedItems.concat(partialItems);
+
+        if (allPendingItems.length > 0) {
+            const pendingListUl = document.getElementById('pending-items-list');
+            pendingListUl.innerHTML = allPendingItems.map(itemText => `<li class="list-group-item">${itemText}</li>`).join('');
+            partialReceiptModal.show();
+
+            document.getElementById('confirm-partial-receipt-btn').onclick = function() {
+                form.submit();
+            };
+        } else {
+            form.submit();
+        }
+    }
+});
+
+function updateFileName(input) {
+    const uploadBox = input.closest('.upload-box');
+    const fileNameSpan = uploadBox.querySelector('.file-name');
+    const uploadTextSpan = uploadBox.querySelector('.upload-text');
+    if (input.files.length > 0) {
+        fileNameSpan.textContent = input.files[0].name;
+        uploadTextSpan.innerHTML = '<i class="fas fa-edit"></i> Alterar';
+    } else {
+        fileNameSpan.textContent = '';
+        uploadTextSpan.innerHTML = '<i class="fas fa-upload"></i> Anexar';
+    }
+}
+</script>
+{% endblock %}

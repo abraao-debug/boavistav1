@@ -61,26 +61,42 @@
             <div class="row align-items-center">
                 <div class="col-md-7">
                     <h5 class="mb-1">{{ sc.nome_descritivo }}</h5>
-                    <div class="d-flex flex-wrap gap-3 text-muted small mt-2">
+                    <div class="d-flex flex-wrap gap-3 text-muted small mt-2 align-items-center">
                         <span><strong>Código:</strong> {{ sc.numero }}</span>
                         <span><strong>Obra:</strong> {{ sc.obra.nome }}</span>
                         <span><i class="fas fa-calendar-alt"></i> <strong>Necessário:</strong> {{ sc.data_necessidade|date:"d/m/Y" }}</span>
                         <span><i class="fas fa-list"></i> <strong>Itens:</strong> {{ sc.itens.count }}</span>
+                        
+                        {% if sc.is_agregado %}
+                            <span class="badge bg-warning text-dark"><i class="fas fa-truck"></i> Pedido de Agregado</span>
+                        {% elif sc.is_mista %}
+                            <span class="badge bg-info text-dark"><i class="fas fa-exchange-alt"></i> Pedido Misto</span>
+                        {% endif %}
                     </div>
                 </div>
                 <div class="col-md-5 text-end">
-                    <div class="btn-group">
-                        <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalDetalhesSC" data-sc-id="{{ sc.id }}" data-modal-type="action">
-                            <i class="fas fa-play"></i> Iniciar Cotação
-                        </button>
-                        <button type="button" class="btn btn-success dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown"></button>
-                        <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="{% url 'materiais:escritorio_editar_sc' sc.id %}"><i class="fas fa-edit fa-fw me-2"></i> Editar</a></li>
-                            <li><button class="dropdown-item" onclick="abrirModalRejeicao('{{ sc.id }}', '{{ sc.nome_descritivo }}')"><i class="fas fa-times fa-fw me-2 text-danger"></i> Rejeitar</button></li>
-                            <li><hr class="dropdown-divider"></li>
-                            <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#modalDetalhesSC" data-sc-id="{{ sc.id }}" data-modal-type="details"><i class="fas fa-eye fa-fw me-2"></i> Ver Detalhes</button></li>
-                        </ul>
-                    </div>
+                    {% if sc.is_agregado %}
+                        <a href="{% url 'materiais:cotacao_agregado' sc.id %}" class="btn btn-warning">
+                            <i class="fas fa-truck"></i> Pedido Simplificado
+                        </a>
+                    {% elif sc.is_mista %}
+                        <a href="{% url 'materiais:dividir_solicitacao_agregado' sc.id %}" class="btn btn-info">
+                            <i class="fas fa-exchange-alt"></i> Dividir e Cotar
+                        </a>
+                    {% else %}
+                        <div class="btn-group">
+                            <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#solicitarCotacaoModal" data-sc-id="{{ sc.id }}" data-sc-name="{{ sc.nome_descritivo }}">
+                                <i class="fas fa-play"></i> Iniciar Cotação
+                            </button>
+                            <button type="button" class="btn btn-success dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown"></button>
+                            <ul class="dropdown-menu">
+                                <li><a class="dropdown-item" href="{% url 'materiais:escritorio_editar_sc' sc.id %}"><i class="fas fa-edit fa-fw me-2"></i> Editar</a></li>
+                                <li><button class="dropdown-item" onclick="abrirModalRejeicao('{{ sc.id }}', '{{ sc.nome_descritivo }}')"><i class="fas fa-times fa-fw me-2 text-danger"></i> Rejeitar</button></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#modalDetalhesSC" data-sc-id="{{ sc.id }}" data-modal-type="details"><i class="fas fa-eye fa-fw me-2"></i> Ver Detalhes</button></li>
+                            </ul>
+                        </div>
+                    {% endif %}
                 </div>
             </div>
         </div>

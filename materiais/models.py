@@ -152,6 +152,9 @@ class ItemCatalogo(models.Model):
     tags = models.ManyToManyField(Tag, blank=True)
     ativo = models.BooleanField(default=True, verbose_name="Ativo")
 
+    # --- ADICIONE ESTA LINHA ---
+    is_agregado = models.BooleanField(default=False, verbose_name="É Agregado?")
+
     def save(self, *args, **kwargs):
         if not self.codigo:
             prefixo = self.categoria.nome[:3].upper() if self.categoria else "GER"
@@ -179,7 +182,7 @@ class SolicitacaoCompra(models.Model):
         ('cotacao_selecionada', 'Cotação - Recebida/Analisar'),
         ('finalizada', 'RM Gerada'),
         ('a_caminho', 'A Caminho'),
-        ('recebida_parcial', 'Recebida Parcialmente'),
+        ('recebida_parcial', 'Recebida Parcialmente'),  # <-- NOVO STATUS ADICIONADO
         ('recebida', 'Recebida'),
     ]
     numero = models.CharField(max_length=100, unique=True, blank=True, verbose_name="Código")
@@ -295,11 +298,28 @@ class RequisicaoMaterial(models.Model):
     enviada_fornecedor = models.BooleanField(default=False)
     data_envio_fornecedor = models.DateTimeField(null=True, blank=True)
 
-    def save(self, *args, **kwargs):  
-        if not self.numero:  
-            ano = timezone.now().year
-            ultimo_num = RequisicaoMaterial.objects.filter(numero__startswith=f'RM-{ano}').count()
-            self.numero = f'RM-{ano}-{(ultimo_num + 1):04d}'
+    def save(self, *args, **kwargs):
+        if not self.numero:
+            # Usamos uma transação para garantir que dois usuários peguem o mesmo número ao mesmo tempo
+            with transaction.atomic():
+                ano = timezone.now().year
+                
+                # Busca a última RM criada no ano corrente, ordenando pelo número
+                ultimo_rm = RequisicaoMaterial.objects.filter(numero__startswith=f'RM-{ano}').order_by('numero').last()
+                
+                proximo_sequencial = 1
+                if ultimo_rm:
+                    try:
+                        # Extrai o número sequencial do último código (ex: de 'RM-2025-0003', pega o '3')
+                        ultimo_sequencial = int(ultimo_rm.numero.split('-')[-1])
+                        proximo_sequencial = ultimo_sequencial + 1
+                    except (ValueError, IndexError):
+                        # Se houver algum erro no formato do número, usa a contagem como um fallback seguro
+                        proximo_sequencial = RequisicaoMaterial.objects.filter(numero__startswith=f'RM-{ano}').count() + 1
+                
+                # Gera o novo número com 4 dígitos (ex: 0001, 0002)
+                self.numero = f'RM-{ano}-{proximo_sequencial:04d}'
+        
         super().save(*args, **kwargs)
         
     def __str__(self):

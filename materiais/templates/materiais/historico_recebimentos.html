@@ -21,33 +21,49 @@
     <div class="row">
         {% for recebimento in materiais_recebidos %}
         <div class="col-md-6 mb-3">
-            <div class="card">
+            <div class="card h-100">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h6 class="mb-0">SC: {{ recebimento.solicitacao.numero }}</h6>
-                    <span class="status-badge badge-entregue">Recebido</span>
+                    
+                    {% if recebimento.solicitacao.status == 'recebida' %}
+                        <span class="status-badge badge-entregue">Recebida (Completa)</span>
+                    {% else %}
+                        <span class="badge bg-info">Recebimento Parcial</span>
+                    {% endif %}
                 </div>
                 <div class="card-body">
                     <div class="row">
                         <div class="col-6">
                             <small class="text-muted">Obra:</small>
-                            <p class="mb-1">{{ recebimento.solicitacao.obra.nome|default:"-" }}</p>
+                            <p class="mb-2">{{ recebimento.solicitacao.obra.nome|default:"-" }}</p>
                         </div>
                         <div class="col-6">
-                            <small class="text-muted">Data Recebimento:</small>
-                            <p class="mb-1">{{ recebimento.data_recebimento|date:"d/m/Y H:i" }}</p>
+                            <small class="text-muted">Data da Entrega:</small>
+                            <p class="mb-2">{{ recebimento.data_recebimento|date:"d/m/Y H:i" }}</p>
                         </div>
-                    </div>
-                    <div class="row mt-2">
-                        <div class="col-6">
+                        <div class="col-12">
                             <small class="text-muted">Recebido por:</small>
                             <p class="mb-1">{{ recebimento.recebedor.get_full_name|default:recebimento.recebedor.username }}</p>
                         </div>
-                        <div class="col-6">
-                            <small class="text-muted">Total de Itens na Entrega:</small>
-                            <p class="mb-1">{{ recebimento.itens_recebidos.count }} item{{ recebimento.itens_recebidos.count|pluralize:"s" }}</p>
-                        </div>
                     </div>
-                    <hr>
+                    <hr class="my-3">
+                    
+                    <h6 class="mb-2"><i class="fas fa-box"></i> Itens nesta entrega:</h6>
+                    {% if recebimento.itens_recebidos.all %}
+                        <ul class="list-unstyled">
+                            {% for item in recebimento.itens_recebidos.all %}
+                                <li>- {{ item.quantidade_recebida|floatformat:"-2" }} {{ item.item_solicitado.unidade }} de <strong>{{ item.item_solicitado.descricao }}</strong></li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p class="text-muted small">Nenhum item foi registrado nesta entrega específica.</p>
+                    {% endif %}
+                    
+                    {% if recebimento.observacoes %}
+                        <p class="mt-2 mb-0"><small class="text-muted"><strong>Obs:</strong> {{ recebimento.observacoes }}</small></p>
+                    {% endif %}
+                </div>
+                <div class="card-footer bg-light">
                     <div class="d-flex gap-2">
                         {% if recebimento.nota_fiscal %}<a href="{{ recebimento.nota_fiscal.url }}" class="btn btn-sm btn-outline-primary" target="_blank">Nota Fiscal</a>{% endif %}
                         {% if recebimento.sc_assinada %}<a href="{{ recebimento.sc_assinada.url }}" class="btn btn-sm btn-outline-secondary" target="_blank">SC Assinada</a>{% endif %}
@@ -65,9 +81,9 @@
             <h5>Nenhum recebimento encontrado</h5>
             <p class="text-muted">Você ainda não recebeu nenhum material.</p>
             <a href="{% url 'materiais:registrar_recebimento' %}" class="btn btn-warning mt-3">
-                <i class="fas fa-truck"></i> Ir para Recebimento de Material            </a>
+                <i class="fas fa-truck"></i> Ir para Recebimento de Material
+            </a>
         </div>
     </div>
 {% endif %}
-
 {% endblock %}
