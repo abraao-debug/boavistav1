@@ -734,7 +734,7 @@ def historico_recebimentos(request):
 @login_required
 def cadastrar_itens(request):
     # PERMISSÃO AMPLIADA PARA ENGENHEIRO
-    if request.user.perfil not in ['almoxarife_escritorio', 'diretor', 'engenheiro']:
+    if request.user.perfil not in ['almoxarife_escritorio', 'diretor', 'engenheiro','almoxarife_obra']:
         messages.error(request, 'Acesso negado. Apenas o escritório ou diretoria pode cadastrar itens.')
         return redirect('materiais:dashboard')
 
@@ -1387,7 +1387,7 @@ def api_solicitacao_detalhes(request, solicitacao_id):
 @login_required
 def gerenciar_categorias(request):
     # PERMISSÃO AMPLIADA PARA ENGENHEIRO
-    if request.user.perfil not in ['almoxarife_escritorio', 'diretor', 'engenheiro']:
+    if request.user.perfil not in ['almoxarife_escritorio', 'diretor', 'engenheiro','almoxarife_obra']:
         messages.error(request, 'Acesso negado.')
         return redirect('materiais:dashboard')
 
@@ -1953,7 +1953,7 @@ def api_subcategorias(request, categoria_id):
 @login_required
 def editar_item(request, item_id):
     # CORREÇÃO: Acesso liberado para engenheiro, almoxarife_escritorio e diretor
-    PERFIS_PERMITIDOS = ['almoxarife_escritorio', 'diretor', 'engenheiro']
+    PERFIS_PERMITIDOS = ['almoxarife_escritorio', 'diretor', 'engenheiro','almoxarife_obra']
     if request.user.perfil not in PERFIS_PERMITIDOS:
         messages.error(request, 'Você não tem permissão para editar itens do catálogo.')
         return redirect('materiais:dashboard')
@@ -2382,7 +2382,7 @@ def alterar_status_fornecedor(request, fornecedor_id):
 @login_required
 def excluir_categoria_item(request, categoria_id):
     if request.method == 'POST':
-        if request.user.perfil not in ['almoxarife_escritorio', 'diretor']:
+        if request.user.perfil not in ['almoxarife_escritorio', 'diretor','almoxarife_obra','engenhairo']:
             messages.error(request, 'Acesso negado.')
             return redirect('materiais:dashboard')
 
@@ -2572,7 +2572,7 @@ def dividir_solicitacao_agregado(request, solicitacao_id):
 def api_item_check(request):
     """API para verificar duplicidade ou similaridade de item em tempo real."""
     # PERFIS CORRIGIDOS para incluir 'engenheiro', conforme a regra de acesso à função de cadastro.
-    if request.user.perfil not in ['almoxarife_escritorio', 'diretor', 'engenheiro']:
+    if request.user.perfil not in ['almoxarife_escritorio', 'diretor', 'engenheiro','almoxarife_obra']:
         return JsonResponse({'status': 'denied', 'message': 'Acesso negado para esta função de API.'}, status=403)
         
     descricao = request.GET.get('descricao', '').strip()
@@ -2609,7 +2609,7 @@ def api_item_check(request):
 @login_required
 def apagar_item(request, item_id):
     """View para apagar um item do catálogo."""
-    PERFIS_PERMITIDOS = ['almoxarife_escritorio', 'diretor', 'engenheiro']
+    PERFIS_PERMITIDOS = ['almoxarife_escritorio', 'diretor', 'engenheiro','almoxarife_obra']
     if request.user.perfil not in PERFIS_PERMITIDOS:
         messages.error(request, 'Você não tem permissão para apagar itens do catálogo.')
         return redirect('materiais:cadastrar_itens')

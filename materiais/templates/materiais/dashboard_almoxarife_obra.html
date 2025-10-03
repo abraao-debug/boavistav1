@@ -42,4 +42,25 @@
         </div>
     </div>
 </div>
+
+{# NOVO BLOCO ADICIONADO PARA GERENCIAMENTO DE CADASTROS #}
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-cogs"></i> Gerenciamento do Catálogo</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-flex flex-wrap gap-2">
+                    <a href="{% url 'materiais:cadastrar_itens' %}" class="btn btn-outline-success">
+                        <i class="fas fa-plus"></i> Cadastrar/Gerenciar Itens
+                    </a>
+                    <a href="{% url 'materiais:gerenciar_categorias' %}" class="btn btn-outline-dark">
+                        <i class="fas fa-tags"></i> Gerenciar Categorias
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
