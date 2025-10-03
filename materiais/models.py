@@ -484,8 +484,8 @@ class EnvioCotacao(models.Model):
     prazo_pagamento = models.PositiveIntegerField(default=0, verbose_name="Prazo de Pagamento (dias)", help_text="Prazo de pagamento sugerido ao fornecedor em dias.")
 
     def __str__(self):
-        return f"Envio para {self.fornecedor.nome} - SC {self.solicitacao.numero}"
-
+        return f"Envio para {self.fornecedor.nome_fantasia} - SC {self.solicitacao.numero}"
+        
     class Meta:
         verbose_name = "Envio de Cotação"
         verbose_name_plural = "Envios de Cotação"
