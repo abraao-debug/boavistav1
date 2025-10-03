@@ -378,6 +378,8 @@ document.addEventListener('DOMContentLoaded', function() {
             itemDescricaoSpan.textContent = itemDescricao;
             
             // Define a URL de ação do formulário usando a URL reversa do Django
+                        // Define a URL de ação do formulário usando a URL reversa do Django
+
             formAction.action = `{% url 'materiais:apagar_item' 0 %}`.replace('0', itemId);
         });
     }
