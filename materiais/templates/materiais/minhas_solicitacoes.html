@@ -1,162 +1,300 @@
 {% extends 'materiais/base.html' %}
-{% load materiais_extras %}
-
-{% block title %}Minhas Solicitações{% endblock %}
+{% block title %}Nova Solicitação de Compra{% endblock %}
 
 {% block content %}
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+
 <style>
     {% include 'materiais/styles_dashboard.css' %}
-    .sortable a { text-decoration: none; color: inherit; font-weight: bold; }
-    .sortable a:hover { color: #0d6efd; }
-    .sort-icon { display: inline-block; width: 1em; text-align: center; color: #0d6efd; }
+    .item-adicionado { background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: .375rem; padding: .75rem 1rem; }
+    #itemsListContainer { max-height: 350px; overflow-y: auto; overflow-x: hidden; padding-right: 5px; }
+    .select2-container--default .select2-selection--single { height: calc(1.5em + .75rem + 2px); padding: .375rem .75rem; border: 1px solid #ced4da; }
+    .select2-container--default .select2-selection--single .select2-selection__rendered { line-height: 1.5; padding-left: 0; }
+    .select2-container--default .select2-selection--single .select2-selection__arrow { height: calc(1.5em + .75rem); }
+    .select2-results__options { max-height: 350px !important; overflow-y: auto !important; }
+
+    /* AJUSTE VISUAL PARA O BOTÃO DE EMERGÊNCIA */
+    .emergency-box .form-check.form-switch { font-size: 1.25rem; }
+    .emergency-box .form-check-input { width: 3em; height: 1.5em; }
 </style>
 
-<div class="d-flex align-items-center mb-3">
-    <a href="{% url 'materiais:dashboard' %}" class="btn btn-secondary me-3"><i class="fas fa-arrow-left"></i> Voltar</a>
-    <div>
-        <h4 class="mb-0">Minhas Solicitações</h4>
-        <p class="text-muted mb-0">Veja e acompanhe todas as solicitações que você criou.</p>
-    </div>
-</div>
-<hr class="mb-4">
+<form method="POST" id="mainForm">
+    {% csrf_token %}
+    <input type="hidden" name="itens_json" id="itensJsonInput">
 
-<div class="card mb-4">
-    <div class="card-body bg-light">
-        <form method="GET" action="{% url 'materiais:minhas_solicitacoes' %}">
-            <div class="row g-3 align-items-end">
-                <div class="col-md-4"><label for="q" class="form-label">Pesquisa Rápida</label><input type="text" name="q" id="q" class="form-control" value="{{ filtros_aplicados.q }}" placeholder="Código, item, obra..."></div>
-                <div class="col-md-2"><label for="ano" class="form-label">Ano</label><input type="number" name="ano" id="ano" class="form-control" value="{{ filtros_aplicados.ano }}" placeholder="Ex: 2025"></div>
-                <div class="col-md-2"><label for="mes" class="form-label">Mês</label><select name="mes" id="mes" class="form-select"><option value="">Todos</option>{% for mes_num in meses_opcoes %}<option value="{{ mes_num }}" {% if filtros_aplicados.mes == mes_num|stringformat:"s" %}selected{% endif %}>{{ mes_num }}</option>{% endfor %}</select></div>
-                <div class="col-md-2"><label for="categoria" class="form-label">Categoria</label><select name="categoria" id="categoria" class="form-select"><option value="">Todas</option>{% for cat in categorias_sc %}<option value="{{ cat.id }}" {% if filtros_aplicados.categoria == cat.id|stringformat:"s" %}selected{% endif %}>{{ cat.nome }}</option>{% endfor %}</select></div>
-                <div class="col-md-2"><button type="submit" class="btn btn-primary w-100"><i class="fas fa-search"></i> Filtrar</button></div>
-            </div>
-        </form>
-    </div>
-</div>
-
-<div class="card">
-    <div class="card-body">
-
-        {% if solicitacoes %}
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            
-            {# Contagem de resultados #}
-            <p class="text-muted mb-0">
-                Mostrando {{ solicitacoes.start_index }} a {{ solicitacoes.end_index }} de {{ solicitacoes.paginator.count }} solicitações.
-            </p>
-
-            {# Formulário de Mostrar (Dropdown de per_page) #}
-            <form method="GET" action="" class="d-flex align-items-center">
-                <input type="hidden" name="q" value="{{ filtros_aplicados.q }}">
-                <input type="hidden" name="ano" value="{{ filtros_aplicados.ano }}">
-                <input type="hidden" name="mes" value="{{ filtros_aplicados.mes }}">
-                <input type="hidden" name="categoria" value="{{ filtros_aplicados.categoria }}">
-                <input type="hidden" name="sort" value="{{ current_sort }}">
-                <input type="hidden" name="dir" value="{{ current_dir }}">
-                <label for="per_page" class="form-label me-2 mb-0">Mostrar:</label>
-                <select name="per_page" id="per_page" class="form-select form-select-sm" style="width: auto;" onchange="this.form.submit()">
-                    <option value="10" {% if per_page == '10' %}selected{% endif %}>10</option>
-                    <option value="25" {% if per_page == '25' %}selected{% endif %}>25</option>
-                    <option value="50" {% if per_page == '50' %}selected{% endif %}>50</option>
-                    <option value="100" {% if per_page == '100' %}selected{% endif %}>100</option>
-                </select>
-            </form>
+    <div class="d-flex align-items-center mb-4">
+        <a href="{% url 'materiais:dashboard' %}" class="btn btn-secondary me-3"><i class="fas fa-arrow-left"></i> Voltar</a>
+        <div>
+            <h4 class="mb-0">Nova Solicitação</h4>
+            <p class="text-muted mb-0">Preencha os dados e adicione os itens necessários.</p>
         </div>
-        
-            <div class="table-responsive">
-                <table class="table table-hover align-middle">
-                    <thead>
-                        <tr>
-                            {% with base_url=request.path url_params=request.GET.urlencode|remove_param:'sort,dir' %}
-                            <th class="sortable">
-                                <a href="{{ base_url }}?sort=codigo&dir={% if current_sort == 'codigo' and current_dir == 'asc' %}desc{% else %}asc{% endif %}&{{ url_params }}">
-                                    Código <span class="sort-icon">{% if current_sort == 'codigo' %}{% if current_dir == 'asc' %}&#9650;{% else %}&#9660;{% endif %}{% endif %}</span>
-                                </a>
-                            </th>
-                            <th>Nome</th>
-                            <th class="sortable">
-                                <a href="{{ base_url }}?sort=obra&dir={% if current_sort == 'obra' and current_dir == 'asc' %}desc{% else %}asc{% endif %}&{{ url_params }}">
-                                    Obra <span class="sort-icon">{% if current_sort == 'obra' %}{% if current_dir == 'asc' %}&#9650;{% else %}&#9660;{% endif %}{% endif %}</span>
-                                </a>
-                            </th>
-                            <th class="sortable">
-                                <a href="{{ base_url }}?sort=data_criacao&dir={% if current_sort == 'data_criacao' and current_dir == 'asc' %}desc{% else %}asc{% endif %}&{{ url_params }}">
-                                    Data Criação <span class="sort-icon">{% if current_sort == 'data_criacao' or not current_sort %}{% if current_dir == 'asc' %}&#9650;{% else %}&#9660;{% endif %}{% endif %}</span>
-                                </a>
-                            </th>
-                            <th class="sortable">
-                                <a href="{{ base_url }}?sort=status&dir={% if current_sort == 'status' and current_dir == 'asc' %}desc{% else %}asc{% endif %}&{{ url_params }}">
-                                    Status <span class="sort-icon">{% if current_sort == 'status' %}{% if current_dir == 'asc' %}&#9650;{% else %}&#9660;{% endif %}{% endif %}</span>
-                                </a>
-                            </th>
-                            <th class="sortable">
-                                <a href="{{ base_url }}?sort=itens&dir={% if current_sort == 'itens' and current_dir == 'asc' %}desc{% else %}asc{% endif %}&{{ url_params }}">
-                                    Itens <span class="sort-icon">{% if current_sort == 'itens' %}{% if current_dir == 'asc' %}&#9650;{% else %}&#9660;{% endif %}{% endif %}</span>
-                                </a>
-                            </th>
-                            <th>Ações</th>
-                            {% endwith %}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for solicitacao in solicitacoes %}
-                        <tr>
-                            <td>{{ solicitacao.numero }}</td>
-                            <td><strong>{{ solicitacao.nome_descritivo }}</strong></td>
-                            <td>{{ solicitacao.obra.nome|default:"-" }}</td>
-                            <td>{{ solicitacao.data_criacao|date:"d/m/Y H:i" }}</td>
-                            <td>
-                                {% if solicitacao.status == 'pendente_aprovacao' %}<span class="status-badge badge-aberto">{{ solicitacao.get_status_display }}</span>
-                                {% elif solicitacao.status == 'aprovada' or solicitacao.status == 'aprovado_engenharia' %}<span class="status-badge badge-aprovado">{{ solicitacao.get_status_display }}</span>
-                                {% elif solicitacao.status == 'em_cotacao' or solicitacao.status == 'aguardando_resposta' or solicitacao.status == 'cotacao_selecionada' %}<span class="status-badge badge-cotacao">{{ solicitacao.get_status_display }}</span>
-                                {% elif solicitacao.status == 'finalizada' %}<span class="status-badge badge-finalizada">{{ solicitacao.get_status_display }}</span>
-                                {% elif solicitacao.status == 'a_caminho' %}<span class="status-badge badge-caminho">{{ solicitacao.get_status_display }}</span>
-                                {% elif solicitacao.status == 'recebida' or solicitacao.status == 'recebida_parcial' %}<span class="status-badge badge-entregue">{{ solicitacao.get_status_display }}</span>
-                                {% elif solicitacao.status == 'rejeitada' %}<span class="status-badge badge-rejeitada">{{ solicitacao.get_status_display }}</span>
-                                {% else %}<span class="badge bg-secondary">{{ solicitacao.get_status_display }}</span>{% endif %}
-                            </td>
-                            <td>
-                                <span class="badge bg-light text-dark border">{{ solicitacao.item_count }} item{{ solicitacao.item_count|pluralize:"s" }}</span>
-                            </td>
-                            <td>
-                                <button class="btn btn-sm btn-outline-primary btn-ver-detalhes" data-bs-toggle="modal" data-bs-target="#modalDetalhesSC" data-sc-id="{{ solicitacao.id }}">
-                                    <i class="fas fa-eye"></i> Ver Detalhes
-                                </button>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+    </div>
+    <hr class="mb-4">
+
+    <div class="row">
+        <div class="col-lg-7 mb-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5>Informações Gerais</h5>
+                    <div class="row">
+                        <div class="col-md-4 mb-3"><label class="form-label">Solicitante</label><input type="text" class="form-control" value="{{ user.get_full_name|default:user.username }}" disabled></div>
+                        <div class="col-md-4 mb-3">
+                            <label for="categoria_sc" class="form-label">Categoria da SC</label>
+                            <select class="form-select" id="categoria_sc" name="categoria_sc"><option value="">Nenhuma</option>{% for cat_sc in categorias_sc %}<option value="{{ cat_sc.id }}">{{ cat_sc.nome }}</option>{% endfor %}</select>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="obra" class="form-label">Obra *</label>
+                            <select class="form-select" id="obra" name="obra" required><option value="" disabled selected>Selecione a obra...</option>{% for o in obras %}<option value="{{ o.id }}">{{ o.nome }}</option>{% endfor %}</select>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="data_necessidade" class="form-label">Data Necessária *</label>
+                            <input type="date" class="form-control" id="data_necessidade" name="data_necessidade" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="destino" class="form-label">Destino de Entrega</label>
+                            <select class="form-select" id="destino" name="destino"><option value="">Mesmo endereço da obra</option>{% for destino in destinos_entrega %}<option value="{{ destino.id }}">{{ destino.nome }}</option>{% endfor %}</select>
+                        </div>
+                    </div>
+                    <div class="mb-3"><label for="justificativa" class="form-label">Observação Geral</label><textarea class="form-control" id="justificativa" name="justificativa" rows="3"></textarea></div>
+                    <div class="emergency-box"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="is_emergencial" name="is_emergencial"><label class="form-check-label" for="is_emergencial"><i class="fas fa-exclamation-triangle"></i> Solicitação Emergencial</label></div></div>
+                </div>
             </div>
-
-            <nav>
-                <ul class="pagination justify-content-center">
-                    {% if solicitacoes.has_previous %}
-                        <li class="page-item"><a class="page-link" href="?page=1&{{ request.GET.urlencode|remove_param:'page' }}">Primeira</a></li>
-                        <li class="page-item"><a class="page-link" href="?page={{ solicitacoes.previous_page_number }}&{{ request.GET.urlencode|remove_param:'page' }}">Anterior</a></li>
-                    {% endif %}
-
-                    <li class="page-item active" aria-current="page">
-                        <span class="page-link">Página {{ solicitacoes.number }} de {{ solicitacoes.paginator.num_pages }}</span>
-                    </li>
-
-                    {% if solicitacoes.has_next %}
-                        <li class="page-item"><a class="page-link" href="?page={{ solicitacoes.next_page_number }}&{{ request.GET.urlencode|remove_param:'page' }}">Próxima</a></li>
-                        <li class="page-item"><a class="page-link" href="?page={{ solicitacoes.paginator.num_pages }}&{{ request.GET.urlencode|remove_param:'page' }}">Última</a></li>
-                    {% endif %}
-                </ul>
-            </nav>
-
-        {% else %}
-            <div class="text-center p-5">
-                <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
-                <h5>Nenhuma solicitação encontrada</h5>
-                <p class="text-muted">Tente ajustar os filtros ou crie uma nova solicitação.</p>
+        </div>
+        <div class="col-lg-5 mb-4">
+            <div class="card h-100">
+                <div class="card-body d-flex flex-column">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5>Itens da Solicitação (<span id="itemCount">0</span>)</h5>
+                        <div class="d-flex gap-2">
+                            {# NOVO BOTÃO ADICIONADO AQUI #}
+                            <a href="{% url 'materiais:cadastrar_item_inteligente' %}" class="btn btn-info" title="Usar Classificação Inteligente">
+                                <i class="fas fa-brain"></i> IA
+                            </a>
+                            <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addItemModal">
+                                <i class="fas fa-plus"></i> Adicionar Item
+                            </button>
+                        </div>
+                    </div>
+                    <div id="itemsListContainer" class="flex-grow-1"><div id="placeholder" class="text-center p-4 text-muted d-flex flex-column justify-content-center align-items-center h-100"><i class="fas fa-box-open fa-3x mb-3"></i><p class="mb-2">Nenhum item adicionado.</p></div></div>
+                </div>
             </div>
-        {% endif %}
+        </div>
+    </div>
+    
+    <div class="text-end mt-2"><a href="{% url 'materiais:dashboard' %}" class="btn btn-light border">Cancelar</a><button type="submit" class="btn btn-primary px-4">Criar Solicitação</button></div>
+</form>
+
+<div class="modal fade" id="addItemModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title">Adicionar Item do Catálogo</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <h6>Filtros</h6>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="filtroCategoria" class="form-label">Categoria</label>
+                        <select class="form-select" id="filtroCategoria"><option value="" selected>Todas as Categorias</option>{% for cat in categorias_principais %}<option value="{{ cat.id }}">{{ cat.nome }}</option>{% endfor %}</select>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label for="filtroSubcategoria" class="form-label">Subcategoria</label>
+                        <select class="form-select" id="filtroSubcategoria" disabled><option value="">Selecione uma categoria...</option></select>
+                    </div>
+                </div>
+                <hr>
+                <div class="mb-3">
+                    <label for="itemCatalogoSelect" class="form-label">Buscar Item no Catálogo *</label>
+                    <select class="form-select" id="itemCatalogoSelect" style="width: 100%;"></select>
+                </div>
+                <div id="itemDetails" class="d-none">
+                    <div class="row bg-light p-2 rounded mb-3 mx-1">
+                        <div class="col-md-8"><small class="text-muted d-block">Descrição do Item (Travado)</small><p id="detailDescricao" class="fw-bold mb-0"></p></div>
+                        <div class="col-md-4"><small class="text-muted d-block">Unidade (Travado)</small><p id="detailUnidade" class="fw-bold mb-0"></p></div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3"><label for="quantidadeInput" class="form-label">Quantidade *</label><input type="number" class="form-control" id="quantidadeInput" value="1" min="0.01" step="0.01"></div>
+                        <div class="col-md-6 mb-3"><label for="observacaoInput" class="form-label">Observação (Opcional)</label><textarea class="form-control" id="observacaoInput" rows="1"></textarea></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button><button type="button" class="btn btn-success" id="addItemBtn">Adicionar Item</button></div>
+        </div>
     </div>
 </div>
+{% endblock %}
 
-{% include 'materiais/_modal_detalhes_sc.html' %}
+{% block javascript %}
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script>
+$(document).ready(function() {
+    let itemsList = [];
+    let catalogItems = []; // Este array será atualizado dinamicamente
 
+    // Seleciona os elementos do DOM
+    const itemCatalogoSelect = $('#itemCatalogoSelect');
+    const mainForm = document.getElementById('mainForm');
+    const hiddenInput = document.getElementById('itensJsonInput');
+    const itemsListContainer = document.getElementById('itemsListContainer');
+    const placeholder = document.getElementById('placeholder');
+    const itemCountSpan = document.getElementById('itemCount');
+    const addItemBtn = document.getElementById('addItemBtn');
+    const filtroCategoria = $('#filtroCategoria');
+    const filtroSubcategoria = $('#filtroSubcategoria');
+    
+    // Inicializa todos os componentes Select2 da página
+    $('#obra, #categoria_sc, #destino').select2();
+    filtroCategoria.select2({ dropdownParent: $('#addItemModal') });
+    filtroSubcategoria.select2({ dropdownParent: $('#addItemModal') });
+
+    // Função central para carregar itens no select principal
+    function carregarItens(categoriaId = null, subcategoriaId = null) {
+        let url = `/api/itens-filtrados/`;
+        let params = new URLSearchParams();
+
+        // Constrói a URL com os parâmetros corretos
+        if (subcategoriaId) {
+            params.append('subcategoria_id', subcategoriaId);
+        } else if (categoriaId) {
+            params.append('categoria_id', categoriaId);
+        }
+        
+        if (params.toString()) {
+            url += `?${params.toString()}`;
+        }
+
+        itemCatalogoSelect.empty().prop('disabled', true).select2({ 
+            placeholder: "Carregando itens...",
+            dropdownParent: $('#addItemModal'),
+            data: []
+        });
+
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                catalogItems = data; // Atualiza nosso cache local de itens
+                const itemsParaSelect = data.map(item => ({id: item.id, text: `${item.codigo} - ${item.descricao}`}));
+                
+                itemCatalogoSelect.empty().select2({ // Limpa antes de popular
+                    placeholder: "Busque pelo código ou descrição do item...",
+                    dropdownParent: $('#addItemModal'),
+                    data: itemsParaSelect
+                }).prop('disabled', false).val(null).trigger('change');
+            });
+    }
+
+    // Ao abrir o modal, reseta os filtros e carrega todos os itens
+    $('#addItemModal').on('show.bs.modal', function () {
+        filtroCategoria.val(null).trigger('change');
+        filtroSubcategoria.empty().append('<option value="">Selecione uma categoria...</option>').prop('disabled', true).trigger('change');
+        carregarItens();
+    });
+
+    // Evento para o filtro de Categoria
+    filtroCategoria.on('change', function() {
+        const categoriaId = $(this).val();
+        const subcategoriaSelect = $('#filtroSubcategoria');
+
+        // ATUALIZA A LISTA DE ITENS IMEDIATAMENTE
+        carregarItens(categoriaId, null);
+
+        filtroSubcategoria.empty().prop('disabled', true);
+        if (!categoriaId) {
+            filtroSubcategoria.append('<option value="">Selecione uma categoria...</option>').trigger('change');
+            return;
+        }
+
+        filtroSubcategoria.append('<option value="">Carregando...</option>').trigger('change');
+        fetch(`/api/subcategorias/${categoriaId}/`)
+            .then(response => response.json())
+            .then(data => {
+                filtroSubcategoria.empty().append('<option value="" selected>Todas as subcategorias</option>');
+                $.each(data, function(i, sub) {
+                    filtroSubcategoria.append(new Option(sub.nome, sub.id));
+                });
+                filtroSubcategoria.prop('disabled', false).trigger('change');
+            });
+    });
+
+    // Evento para o filtro de Subcategoria (refina a busca)
+    filtroSubcategoria.on('change', function() {
+        const categoriaId = filtroCategoria.val();
+        const subcategoriaId = $(this).val();
+        carregarItens(categoriaId, subcategoriaId);
+    });
+
+    // O resto do seu JavaScript continua aqui (sem alterações)
+    itemCatalogoSelect.on('change', function() {
+        const selectedId = $(this).val();
+        const selectedItem = catalogItems.find(item => item.id == selectedId);
+        const detailsDiv = document.getElementById('itemDetails');
+        if (selectedItem) {
+            document.getElementById('detailDescricao').textContent = selectedItem.descricao;
+            document.getElementById('detailUnidade').textContent = selectedItem.unidade__sigla;
+            detailsDiv.classList.remove('d-none');
+        } else {
+            detailsDiv.classList.add('d-none');
+        }
+    });
+
+    addItemBtn.addEventListener('click', function() {
+        const selectedId = itemCatalogoSelect.val();
+        if (!selectedId) { alert('Por favor, selecione um item do catálogo.'); return; }
+        const quantidade = parseFloat(document.getElementById('quantidadeInput').value);
+        if (!quantidade || quantidade <= 0) { alert('Por favor, informe uma quantidade válida.'); return; }
+        const selectedItem = catalogItems.find(item => item.id == selectedId);
+        itemsList.push({
+            item_id: selectedId,
+            descricao: selectedItem.descricao,
+            unidade: selectedItem.unidade__sigla,
+            quantidade: quantidade,
+            observacao: document.getElementById('observacaoInput').value.trim()
+        });
+        renderItems();
+        resetModal();
+    });
+
+    function renderItems() {
+        itemsListContainer.innerHTML = '';
+        if (itemsList.length > 0) {
+            placeholder.style.display = 'none';
+            itemsList.forEach((item, index) => {
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'item-adicionado mb-2 d-flex justify-content-between align-items-center';
+                itemDiv.innerHTML = `<div><strong>${item.descricao}</strong><small class="d-block text-muted">${item.quantidade} ${item.unidade}</small></div><div><button type="button" class="btn btn-sm btn-outline-danger remove-item-btn" data-index="${index}"><i class="fas fa-trash"></i></button></div>`;
+                itemsListContainer.appendChild(itemDiv);
+            });
+        } else {
+            placeholder.style.display = 'flex';
+        }
+        itemCountSpan.textContent = itemsList.length;
+    }
+
+    function resetModal() {
+        itemCatalogoSelect.val(null).trigger('change');
+        document.getElementById('itemDetails').classList.add('d-none');
+        document.getElementById('quantidadeInput').value = '1';
+        document.getElementById('observacaoInput').value = '';
+        bootstrap.Modal.getInstance(document.getElementById('addItemModal')).hide();
+    }
+    
+    itemsListContainer.addEventListener('click', function(e) {
+        const removeBtn = e.target.closest('.remove-item-btn');
+        if (removeBtn) {
+            const index = removeBtn.getAttribute('data-index');
+            itemsList.splice(index, 1);
+            renderItems();
+        }
+    });
+    
+    mainForm.addEventListener('submit', function(e) {
+        if (itemsList.length === 0) {
+            e.preventDefault();
+            alert('Você precisa adicionar pelo menos um item à solicitação.');
+            return;
+        }
+        hiddenInput.value = JSON.stringify(itemsList);
+    });
+});
+</script>
 {% endblock %}

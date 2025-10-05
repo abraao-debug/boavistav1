@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cadastro Inteligente de Item</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+            font-size: 1.1em;
+        }
+
+        input[type="text"], textarea {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e1e1e1;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+
+        input[type="text"]:focus, textarea:focus {
+            outline: none;
+            border-color: #4CAF50;
+            box-shadow: 0 0 10px rgba(76, 175, 80, 0.2);
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 120px;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+            color: white;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            width: 100%;
+            margin-top: 20px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(76, 175, 80, 0.3);
+        }
+
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .progress-container {
+            margin: 30px 0;
+            background: #f5f5f5;
+            border-radius: 10px;
+            padding: 20px;
+        }
+
+        .progress-title {
+            font-size: 1.2em;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .step {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+            padding: 15px;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .step.waiting {
+            background: #f8f9fa;
+            border-left: 4px solid #6c757d;
+        }
+
+        .step.processing {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            animation: pulse 1.5s infinite;
+        }
+
+        .step.success {
+            background: #d4edda;
+            border-left: 4px solid #28a745;
+        }
+
+        .step.error {
+            background: #f8d7da;
+            border-left: 4px solid #dc3545;
+        }
+
+        .step-icon {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 15px;
+            font-weight: bold;
+            color: white;
+        }
+
+        .step.waiting .step-icon {
+            background: #6c757d;
+        }
+
+        .step.processing .step-icon {
+            background: #ffc107;
+        }
+
+        .step.success .step-icon {
+            background: #28a745;
+        }
+
+        .step.error .step-icon {
+            background: #dc3545;
+        }
+
+        .step-content {
+            flex: 1;
+        }
+
+        .step-title {
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .step-description {
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        .step-details {
+            margin-top: 10px;
+            padding: 10px;
+            background: rgba(0,0,0,0.05);
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 0.85em;
+            display: none;
+        }
+
+        .step.success .step-details,
+        .step.error .step-details {
+            display: block;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+
+        .result-container {
+            margin-top: 30px;
+            padding: 20px;
+            border-radius: 10px;
+            display: none;
+        }
+
+        .result-container.success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            display: block;
+        }
+
+        .result-container.error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            display: block;
+        }
+
+        .result-title {
+            font-size: 1.3em;
+            font-weight: 600;
+            margin-bottom: 15px;
+        }
+
+        .result-details {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 10px;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #ffc107;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 Cadastro Inteligente</h1>
+            <p>Digite apenas a descrição e deixe a IA fazer o resto!</p>
+        </div>
+
+        <div class="content">
+            <form id="itemForm">
+                <div class="form-group">
+                    <label for="descricao">Descrição do Item:</label>
+                    <textarea 
+                        id="descricao" 
+                        name="descricao" 
+                        placeholder="Ex: Caneta esferográfica azul BIC cristal..."
+                        required
+                    ></textarea>
+                </div>
+
+                <button type="submit" class="btn" id="submitBtn">
+                    🚀 Cadastrar Item Inteligente
+                </button>
+            </form>
+
+            <div class="progress-container" id="progressContainer" style="display: none;">
+                <div class="progress-title">📊 Progresso do Cadastro</div>
+                
+                <div class="step waiting" id="step1">
+                    <div class="step-icon">1</div>
+                    <div class="step-content">
+                        <div class="step-title">Validação dos Dados</div>
+                        <div class="step-description">Verificando se a descrição foi fornecida</div>
+                        <div class="step-details" id="step1-details"></div>
+                    </div>
+                </div>
+
+                <div class="step waiting" id="step2">
+                    <div class="step-icon">2</div>
+                    <div class="step-content">
+                        <div class="step-title">Análise por IA</div>
+                        <div class="step-description">Gemini está analisando o item e sugerindo categoria</div>
+                        <div class="step-details" id="step2-details"></div>
+                    </div>
+                </div>
+
+                <div class="step waiting" id="step3">
+                    <div class="step-icon">3</div>
+                    <div class="step-content">
+                        <div class="step-title">Busca de Unidade</div>
+                        <div class="step-description">Encontrando a unidade de medida adequada</div>
+                        <div class="step-details" id="step3-details"></div>
+                    </div>
+                </div>
+
+                <div class="step waiting" id="step4">
+                    <div class="step-icon">4</div>
+                    <div class="step-content">
+                        <div class="step-title">Cadastro no Sistema</div>
+                        <div class="step-description">Salvando o item no banco de dados</div>
+                        <div class="step-details" id="step4-details"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="result-container" id="resultContainer">
+                <div class="result-title" id="resultTitle"></div>
+                <div class="result-details" id="resultDetails"></div>
+            </div>
+        </div>
+    </div>
+
+ <script>
+    const form = document.getElementById('itemForm');
+    const submitBtn = document.getElementById('submitBtn');
+    const progressContainer = document.getElementById('progressContainer');
+    const resultContainer = document.getElementById('resultContainer');
+
+    // Função para atualizar o status de um step
+    function updateStep(stepId, status, details = '') {
+        const step = document.getElementById(stepId);
+        const detailsDiv = document.getElementById(stepId + '-details');
+        
+        // Remove classes anteriores
+        step.classList.remove('waiting', 'processing', 'success', 'error');
+        step.classList.add(status);
+        
+        // Atualiza o ícone
+        const icon = step.querySelector('.step-icon');
+        if (status === 'processing') {
+            icon.innerHTML = '<div class="spinner"></div>';
+        } else if (status === 'success') {
+            icon.innerHTML = '✓';
+        } else if (status === 'error') {
+            icon.innerHTML = '✗';
+        }
+        
+        // Atualiza os detalhes
+        if (details) {
+            detailsDiv.innerHTML = details;
+        }
+    }
+
+    // Função para mostrar resultado final
+    function showResult(success, title, details) {
+        resultContainer.className = 'result-container ' + (success ? 'success' : 'error');
+        document.getElementById('resultTitle').textContent = title;
+        document.getElementById('resultDetails').innerHTML = details;
+    }
+
+    // Função para fazer requisição AJAX
+    async function makeRequest(url, data) {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify(data)
+        });
+        
+        return await response.json();
+    }
+
+    // Função para obter CSRF token
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    // Handler do formulário
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const descricao = document.getElementById('descricao').value.trim();
+        
+        if (!descricao) {
+            alert('Por favor, digite uma descrição para o item.');
+            return;
+        }
+
+        // Desabilita o botão e mostra progresso
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '⏳ Processando...';
+        progressContainer.style.display = 'block';
+        resultContainer.style.display = 'none';
+
+        try {
+            // Step 1: Validação
+            updateStep('step1', 'processing');
+            await new Promise(resolve => setTimeout(resolve, 500)); // Simula delay
+            updateStep('step1', 'success', `Descrição validada: "${descricao}"`);
+
+            // Step 2: Análise por IA
+            updateStep('step2', 'processing');
+            const aiResponse = await makeRequest('/api/sugerir-categoria/', {
+                descricao: descricao
+            });
+
+            if (aiResponse.success) {
+                updateStep('step2', 'success', 
+                    `Categoria sugerida: ${aiResponse.categoria_sugerida}<br>` +
+                    `Unidade sugerida: ${aiResponse.unidade_sugerida}<br>` +
+                    `Confiança: ${aiResponse.confianca || 'N/A'}`
+                );
+            } else {
+                updateStep('step2', 'error', `Erro na análise: ${aiResponse.error}`);
+                throw new Error(aiResponse.error);
+            }
+
+            // Step 3: Busca de Unidade
+            updateStep('step3', 'processing');
+            await new Promise(resolve => setTimeout(resolve, 300));
+            updateStep('step3', 'success', 
+                `Unidade encontrada: ${aiResponse.unidade_sugerida}<br>` +
+                `ID da unidade: ${aiResponse.unidade_id || 'Será determinado no cadastro'}`
+            );
+
+            // Step 4: Cadastro
+            updateStep('step4', 'processing');
+            const cadastroResponse = await makeRequest('/cadastrar-item-inteligente-submit/', {
+                descricao: descricao,
+                categoria_sugerida: aiResponse.categoria_sugerida,
+                unidade_sugerida: aiResponse.unidade_sugerida
+            });
+
+            if (cadastroResponse.success) {
+                updateStep('step4', 'success', 
+                    `Item cadastrado com sucesso!<br>` +
+                    `ID: ${cadastroResponse.item_id}<br>` +
+                    `Categoria: ${cadastroResponse.categoria}<br>` +
+                    `Unidade: ${cadastroResponse.unidade}`
+                );
+
+                showResult(true, '🎉 Item Cadastrado com Sucesso!', 
+                    `<strong>Descrição:</strong> ${descricao}<br>` +
+                    `<strong>Categoria:</strong> ${cadastroResponse.categoria}<br>` +
+                    `<strong>Unidade:</strong> ${cadastroResponse.unidade}<br>` +
+                    `<strong>ID do Item:</strong> ${cadastroResponse.item_id}`
+                );
+
+                // Limpa o formulário
+                document.getElementById('descricao').value = '';
+
+            } else {
+                updateStep('step4', 'error', `Erro no cadastro: ${cadastroResponse.error}`);
+                throw new Error(cadastroResponse.error);
+            }
+
+        } catch (error) {
+            console.error('Erro:', error);
+            showResult(false, '❌ Erro no Cadastro', 
+                `Ocorreu um erro durante o processo:<br><strong>${error.message}</strong>`
+            );
+        } finally {
+            // Reabilita o botão
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '🚀 Cadastrar Item Inteligente';
+        }
+    });
+
+    // Adiciona CSRF token se não existir
+    if (!getCookie('csrftoken')) {
+        // Faz uma requisição GET para obter o token CSRF
+        fetch('/cadastrar-item-inteligente/')
+            .then(response => response.text())
+            .then(html => {
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                const csrfToken = doc.querySelector('[name=csrfmiddlewaretoken]');
+                if (csrfToken) {
+                    document.cookie = `csrftoken=${csrfToken.value}`;
+                }
+            });
+    }
+</script>
+</body>
+</html>

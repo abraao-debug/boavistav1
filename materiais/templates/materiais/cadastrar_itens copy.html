@@ -1,0 +1,388 @@
+{% extends 'materiais/base.html' %}
+{% block title %}Cadastrar Itens do Catálogo{% endblock %}
+
+{% block content %}
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+
+<style>
+    /* Correção definitiva para o scroll e altura do dropdown */
+    .select2-results__options {
+        max-height: 350px !important; 
+        overflow-y: auto !important;
+    }
+    /* Adiciona estilo para a área de aviso */
+    #avisoSimilaridade {
+        min-height: 20px;
+        padding: 5px;
+        font-size: 0.9em;
+        transition: opacity 0.3s ease;
+    }
+</style>
+
+<div class="d-flex align-items-center mb-3">
+    <a href="{% url 'materiais:dashboard' %}" class="btn btn-secondary me-3">
+        <i class="fas fa-arrow-left"></i> Voltar
+    </a>
+    <div>
+        <h4 class="mb-0">Cadastrar Itens do Catálogo</h4>
+        <p class="text-muted mb-0">Gerenciar itens disponíveis para solicitação</p>
+    </div>
+</div>
+<hr class="mb-4">
+
+<div class="card mb-4">
+    <div class="card-header"><h5><i class="fas fa-plus"></i> Novo Item</h5></div>
+    <div class="card-body">
+        <form method="post" id="formCadastrarItem">
+            {% csrf_token %}
+            
+            {# Este campo hidden será usado para forçar o cadastro após a confirmação #}
+            <input type="hidden" name="forcar_cadastro" id="forcarCadastroInput" value="false">
+            
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="categoria" class="form-label">Categoria *</label>
+                    <select class="form-select" id="categoria" name="categoria" required>
+                        <option value="" selected>Selecione uma categoria...</option>
+                        {% for cat in categorias_principais %}
+                            <option value="{{ cat.id }}">{{ cat.nome }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label for="subcategoria" class="form-label">Subcategoria *</label>
+                    <select class="form-select" id="subcategoria" name="subcategoria" required disabled>
+                        <option value="">Aguardando seleção da Categoria...</option>
+                    </select>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-2 mb-3">
+                    <label class="form-label">Código</label>
+                    <input type="text" class="form-control" value="Automático" disabled>
+                </div>
+                <div class="col-md-10 mb-3">
+                    <label for="descricao" class="form-label">Descrição do Item *</label>
+                    <input type="text" class="form-control" id="descricao" name="descricao" required>
+                    {# Área de Aviso em tempo real #}
+                    <div id="avisoSimilaridade" class="mt-2"></div> 
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label for="unidade" class="form-label">Unidade de Medida *</label>
+                    <select class="form-select" id="unidade" name="unidade" required>
+                        <option value="" selected>Selecione...</option>
+                        {% for u in unidades %}<option value="{{ u.id }}">{{ u }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-8 mb-3">
+                    <label for="tags" class="form-label">Tags (Opcional)</label>
+                    <select class="form-select" id="tags" name="tags" multiple>
+                        {% for tag in tags %}<option value="{{ tag.id }}">{{ tag.nome }}</option>{% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="form-check form-switch mb-3">
+              <input class="form-check-input" type="checkbox" name="status" id="status" checked>
+              <label class="form-check-label" for="status">Item Ativo (aparecerá para solicitações)</label>
+            </div>
+            <button type="submit" class="btn btn-success" id="submitBtn" disabled><i class="fas fa-save"></i> Cadastrar Item</button>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header"><h5><i class="fas fa-list"></i> Itens Cadastrados ({{ itens.count }})</h5></div>
+    <div class="card-body">
+        {% if itens %}
+            <div class="table-responsive">
+                <table class="table table-striped table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Código</th>
+                            <th>Descrição</th>
+                            <th>Categoria</th>
+                            <th>Subcategoria</th>
+                            <th class="text-center">Unidade</th>
+                            <th class="text-center">Status</th>
+                            <th class="text-center">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in itens %}
+                        <tr>
+                            <td>{{ item.codigo }}</td>
+                            <td><strong>{{ item.descricao }}</strong></td>
+                            <td>{{ item.categoria.categoria_mae.nome|default:"-" }}</td>
+                            <td>{{ item.categoria.nome|default:"-" }}</td>
+                            <td class="text-center">{{ item.unidade.sigla }}</td>
+                            <td class="text-center">{% if item.ativo %}<span class="badge bg-success">Ativo</span>{% else %}<span class="badge bg-danger">Inativo</span>{% endif %}</td>
+                            <td class="text-center">
+                                <a href="{% url 'materiais:editar_item' item.id %}" class="btn btn-sm btn-outline-primary" title="Editar Item"><i class="fas fa-edit"></i></a>
+                                
+                                {# NOVO BOTÃO DE EXCLUSÃO COM MODAL #}
+                                <button type="button" class="btn btn-sm btn-outline-danger" 
+                                        data-bs-toggle="modal" data-bs-target="#deletarItemModal" 
+                                        data-item-id="{{ item.id }}" 
+                                        data-item-descricao="{{ item.descricao }}"
+                                        title="Apagar Item">
+                                    <i class="fas fa-trash-alt"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="text-center text-muted p-4"><p>Nenhum item cadastrado ainda.</p></div>
+        {% endif %}
+    </div>
+</div>
+
+{# --- MODAL DE CONFIRMAÇÃO DE DUPLICIDADE --- #}
+<div class="modal fade" id="similaridadeModal" tabindex="-1" aria-labelledby="similaridadeModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title" id="similaridadeModalLabel"><i class="fas fa-exclamation-triangle"></i> Atenção: Item Semelhante Encontrado!</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>A descrição que você digitou é **muito semelhante** aos seguintes itens já cadastrados. Por favor, verifique se não é uma duplicação:</p>
+                <div id="listaItensSimilares" class="alert alert-light">
+                    {# Conteúdo será injetado pelo JS #}
+                </div>
+                <p class="mt-3">Deseja realmente cadastrar este item, ignorando o aviso de similaridade?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar Cadastro</button>
+                <button type="button" class="btn btn-warning" id="btnForcarCadastro">Sim, Cadastrar Mesmo Assim</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# --- NOVO MODAL DE CONFIRMAÇÃO DE DELEÇÃO --- #}
+<div class="modal fade" id="deletarItemModal" tabindex="-1" aria-labelledby="deletarItemModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="deletarItemModalLabel"><i class="fas fa-trash-alt"></i> Confirmação de Exclusão</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Você tem certeza que deseja <strong>apagar permanentemente</strong> o seguinte item do catálogo?</p>
+                <p class="mb-0"><strong>Item:</strong> <span id="itemDescricaoModal"></span></p>
+                <p class="text-danger mt-3">Esta ação <strong>não pode ser desfeita</strong>.</p>
+            </div>
+            <div class="modal-footer">
+                <form id="formDeletarItem" method="POST" action="">
+                    {% csrf_token %}
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-danger">Apagar Item</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+
+{% block javascript %}
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Inicializa todos os componentes Select2 da página
+    $('#categoria').select2({ placeholder: "Selecione uma categoria..." });
+    $('#subcategoria').select2({ placeholder: "Aguardando seleção da Categoria..." });
+    $('#unidade').select2({ placeholder: "Selecione..." });
+    $('#tags').select2({ placeholder: "Selecione as tags" });
+    
+    const descricaoInput = document.getElementById('descricao');
+    const avisoSimilaridadeDiv = document.getElementById('avisoSimilaridade');
+    const formCadastrarItem = document.getElementById('formCadastrarItem');
+    const forcarCadastroInput = document.getElementById('forcarCadastroInput');
+    const submitBtn = document.getElementById('submitBtn'); 
+    const similaridadeModal = new bootstrap.Modal(document.getElementById('similaridadeModal'));
+
+    // Desabilita o botão inicialmente até que a descrição seja validada
+    submitBtn.disabled = true;
+
+    // --- LÓGICA DE CARREGAMENTO DE SUBCATEGORIAS (Mantida) ---
+    $('#categoria').on('change', function() {
+        const categoriaId = $(this).val();
+        const subcategoriaSelect = $('#subcategoria');
+
+        subcategoriaSelect.empty().append('<option value=""></option>').prop('disabled', true);
+
+        if (!categoriaId) {
+            subcategoriaSelect.attr('placeholder', 'Aguardando seleção da Categoria...').trigger('change');
+            return;
+        }
+        
+        subcategoriaSelect.empty().append('<option value="">Carregando...</option>').trigger('change');
+
+        fetch(`/api/subcategorias/${categoriaId}/`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('A resposta da rede não foi OK. Status: ' + response.status);
+                }
+                return response.json();
+            })
+            .then(data => {
+                subcategoriaSelect.empty().append('<option value="" selected>Selecione uma subcategoria...</option>');
+
+                $.each(data, function(index, subcategoria) {
+                    subcategoriaSelect.append(new Option(subcategoria.nome, subcategoria.id, false, false));
+                });
+
+                subcategoriaSelect.prop('disabled', false);
+                subcategoriaSelect.trigger('change');
+            })
+            .catch(error => {
+                console.error('Erro ao buscar subcategorias:', error);
+                avisoSimilaridadeDiv.innerHTML = `<div class="alert alert-danger p-2 mb-0">Erro ao carregar subcategorias.</div>`;
+                subcategoriaSelect.empty().append('<option value="">Erro ao carregar subcategorias</option>').prop('disabled', true);
+                subcategoriaSelect.trigger('change');
+            });
+    });
+
+    // --- LÓGICA DE VERIFICAÇÃO DE SIMILARIDADE EM TEMPO REAL (AJAX) ---
+
+    let checkTimeout;
+
+    descricaoInput.addEventListener('input', function() {
+        // Zera a flag de forçar cadastro ao editar a descrição
+        forcarCadastroInput.value = 'false'; 
+
+        if (checkTimeout) {
+            clearTimeout(checkTimeout);
+        }
+        
+        // Espera 500ms para evitar chamadas excessivas
+        checkTimeout = setTimeout(checkItemSimilarity, 500);
+    });
+
+    function checkItemSimilarity() {
+        const descricao = descricaoInput.value.trim();
+        avisoSimilaridadeDiv.innerHTML = '';
+        descricaoInput.classList.remove('is-invalid');
+        submitBtn.disabled = true;
+
+        if (descricao.length < 3) {
+            return;
+        }
+        
+        // Mostra indicador e desabilita botão
+        avisoSimilaridadeDiv.innerHTML = '<span class="text-info"><i class="fas fa-spinner fa-spin"></i> Verificando duplicidade...</span>';
+        
+        fetch(`{% url 'materiais:api_item_check' %}?descricao=${encodeURIComponent(descricao)}`)
+            .then(response => response.json())
+            .then(data => {
+                avisoSimilaridadeDiv.innerHTML = ''; // Limpa o carregamento
+                
+                if (data.status === 'exact_duplicate') {
+                    // Duplicidade Exata: Bloqueia permanentemente e mostra aviso.
+                    descricaoInput.classList.add('is-invalid');
+                    avisoSimilaridadeDiv.innerHTML = `<div class="alert alert-danger p-2 mb-0">${data.message}</div>`;
+                    submitBtn.disabled = true; // Permanece bloqueado
+                
+                } else if (data.status === 'similar') {
+                    // Similaridade: Permite o submit, mas exige confirmação no modal.
+                    descricaoInput.classList.remove('is-invalid');
+                    
+                    // 1. Gera lista resumida para o aviso em tempo real
+                    const itensSumarizados = data.itens.map(item => 
+                        `<li><strong class="text-dark">${item.descricao}</strong> (Cód: ${item.codigo})</li>`
+                    ).join('');
+
+                    // 2. Constrói o HTML do aviso em tempo real com a lista citada
+                    const avisoHtml = `
+                        <div class="alert alert-warning p-2 mb-0">
+                            <strong>AVISO:</strong> Item(ns) semelhante(s) encontrado(s)! Por favor, verifique a lista:
+                            <ul class="list-unstyled my-1">
+                                ${itensSumarizados}
+                            </ul>
+                            Confirme no modal se deseja duplicar.
+                        </div>`;
+
+                    avisoSimilaridadeDiv.innerHTML = avisoHtml;
+                    
+                    // 3. Preenche o modal com a lista detalhada
+                    const listaModalHtml = data.itens.map(item => 
+                        `<p class="mb-1"><strong>${item.descricao}</strong> (Cód: ${item.codigo}) - ${item.similaridade}% de similaridade</p>`
+                    ).join('');
+                    document.getElementById('listaItensSimilares').innerHTML = listaModalHtml;
+                    
+                    submitBtn.disabled = false; // Permite o clique, que será interceptado abaixo
+                    
+                } else {
+                    // Único: Permite o submit.
+                    descricaoInput.classList.remove('is-invalid');
+                    submitBtn.disabled = false;
+                }
+            })
+            .catch(error => {
+                console.error('Erro na API de checagem:', error);
+                avisoSimilaridadeDiv.innerHTML = '<span class="text-danger">Erro ao verificar similaridade. Tente novamente.</span>';
+                submitBtn.disabled = true; // Bloqueia em caso de falha na comunicação
+            });
+    }
+
+    // --- LÓGICA DE SUBMISSÃO DO FORMULÁRIO (INTERCEPTAÇÃO) ---
+
+    formCadastrarItem.addEventListener('submit', function(e) {
+        // Bloqueia se o campo estiver vazio, inválido (duplicidade exata) ou se a checagem falhou
+        if (descricaoInput.classList.contains('is-invalid') || submitBtn.disabled) {
+            e.preventDefault();
+            return;
+        }
+        
+        const aviso = avisoSimilaridadeDiv.querySelector('.alert-warning');
+        
+        if (aviso && forcarCadastroInput.value === 'false') {
+            // Se houver aviso de similaridade E não houver confirmação prévia:
+            e.preventDefault();
+            similaridadeModal.show();
+        
+        } else if (forcarCadastroInput.value === 'true') {
+            // Confirmado: Permite o submit final
+            return; 
+        } 
+        // Caso contrário, (status: 'ok') o submit passará.
+    });
+
+    // --- LÓGICA DO BOTÃO "FORÇAR CADASTRO" NO MODAL ---
+    document.getElementById('btnForcarCadastro').addEventListener('click', function() {
+        forcarCadastroInput.value = 'true';
+        similaridadeModal.hide();
+        // Dispara o submit novamente, que agora irá passar pela interceptação
+        formCadastrarItem.submit(); 
+    });
+
+    // --- LÓGICA DO MODAL DE EXCLUSÃO (Adicionar ao final do bloco de script) ---
+
+    const deletarItemModalElement = document.getElementById('deletarItemModal');
+    if (deletarItemModalElement) {
+        deletarItemModalElement.addEventListener('show.bs.modal', function (event) {
+            const button = event.relatedTarget;
+            const itemId = button.getAttribute('data-item-id');
+            const itemDescricao = button.getAttribute('data-item-descricao');
+            
+            const itemDescricaoSpan = deletarItemModalElement.querySelector('#itemDescricaoModal');
+            const formAction = deletarItemModalElement.querySelector('#formDeletarItem');
+            
+            itemDescricaoSpan.textContent = itemDescricao;
+            
+            // Define a URL de ação do formulário usando a URL reversa do Django
+                        // Define a URL de ação do formulário usando a URL reversa do Django
+
+            formAction.action = `{% url 'materiais:apagar_item' 0 %}`.replace('0', itemId);
+        });
+    }
+});
+</script>
+{% endblock %}

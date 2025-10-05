@@ -2,6 +2,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
+from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
 from django.utils import timezone
 from django.db.models import Count, Q, Sum, F, DecimalField, Prefetch
@@ -13,6 +14,8 @@ from django.core.paginator import Paginator
 from .forms import SolicitacaoCompraForm
 from django.db.models import Case, When, Value, IntegerField
 from decimal import Decimal
+from . import rm_config
+from . import gemini_service
 from .models import (
     User, SolicitacaoCompra, ItemSolicitacao, Fornecedor, ItemCatalogo, 
     Obra, Cotacao, RequisicaoMaterial, HistoricoSolicitacao, 
@@ -2629,3 +2632,260 @@ def apagar_item(request, item_id):
     # Caso alguém tente acessar via GET, redireciona com aviso
     messages.warning(request, 'A exclusão deve ser feita via POST (botão de apagar).')
     return redirect('materiais:cadastrar_itens')
+
+# FUNÇÃO CORRIGIDA PARA SUBSTITUIR NO views.py
+
+
+@login_required
+@csrf_exempt
+def api_sugerir_categoria(request):
+    """
+    Recebe uma descrição de item e usa a API do Gemini para sugerir a classificação
+    em categorias existentes ou sugerir uma nova.
+    """
+    # Verifica permissão do usuário
+    if request.user.perfil not in ['almoxarife_escritorio', 'diretor', 'engenheiro', 'almoxarife_obra']:
+        return JsonResponse({'success': False, 'error': 'Acesso negado para esta função de IA.'}, status=403)
+    
+    # Aceita GET e POST
+    if request.method not in ['GET', 'POST']:
+        return JsonResponse({'success': False, 'error': 'Método não permitido.'}, status=405)
+    
+    # Captura a descrição conforme o método
+    if request.method == 'GET':
+        item_description = request.GET.get('descricao', '').strip()
+    else:  # POST
+        try:
+            data = json.loads(request.body)
+            item_description = data.get('descricao', '').strip()
+        except Exception:
+            item_description = request.POST.get('descricao', '').strip()
+    
+    if not item_description:
+        return JsonResponse({'success': False, 'error': 'A descrição do item é obrigatória.'}, status=400)
+
+    try:
+        # Busca categorias e subcategorias
+        categorias = CategoriaItem.objects.select_related('categoria_mae').filter(categoria_mae__isnull=False)
+        if not categorias.exists():
+            return JsonResponse({'success': False, 'error': 'Nenhuma categoria encontrada no sistema.'}, status=400)
+        
+        categories_list = "CATEGORIAS DISPONÍVEIS:\n{\n"
+        for cat in categorias:
+            categories_list += f"  - ID: {cat.categoria_mae_id}, Nome: {cat.categoria_mae.nome} -> SubID: {cat.id}, Nome: {cat.nome}\n"
+        categories_list += "}\n\n"
+
+        # Busca unidades de medida
+        unidades = UnidadeMedida.objects.all()
+        if not unidades.exists():
+            return JsonResponse({'success': False, 'error': 'Nenhuma unidade de medida encontrada no sistema.'}, status=400)
+        
+        units_list = "UNIDADES DE MEDIDA DISPONÍVEIS:\n{\n"
+        for unidade in unidades:
+            units_list += f"  - ID: {unidade.id}, Nome: {unidade.nome}, Sigla: {unidade.sigla}\n"
+        units_list += "}"
+
+        # Combina categorias e unidades
+        complete_data = categories_list + units_list
+
+        # Chama o serviço Gemini para classificação
+        gemini_response = gemini_service.classify_item_with_gemini(item_description, complete_data)
+        print("Resposta Gemini:", gemini_response)
+
+        if gemini_response.get("status") == "EXISTENTE":
+            categoria_mae_id = gemini_response.get("categoria_mae_id")
+            subcategoria_id = gemini_response.get("subcategoria_id")
+            unidade_id = gemini_response.get("unidade_id")
+
+            categoria_mae_obj = CategoriaItem.objects.filter(id=categoria_mae_id).first()
+            subcategoria_obj = CategoriaItem.objects.filter(id=subcategoria_id).first()
+            unidade_obj = UnidadeMedida.objects.filter(id=unidade_id).first()
+
+            categoria_nome = f"{categoria_mae_obj.nome if categoria_mae_obj else ''} > {subcategoria_obj.nome if subcategoria_obj else ''}"
+            unidade_nome = f"{unidade_obj.nome} ({unidade_obj.sigla})" if unidade_obj else ""
+
+            return JsonResponse({
+                'success': True,
+                'status': gemini_response.get("status"),
+                'categoria_sugerida': categoria_nome,
+                'unidade_sugerida': unidade_nome,
+                'confianca': 'Alta'  # ajuste conforme sua lógica
+            })
+
+        elif gemini_response.get("status") == "SUGERIR_NOVA":
+            return JsonResponse({
+                'success': True,
+                'status': gemini_response.get("status"),
+                'categoria_sugerida': f"{gemini_response.get('nova_categoria_mae')} > {gemini_response.get('nova_subcategoria')}",
+                'unidade_sugerida': f"{gemini_response.get('nova_unidade')} ({gemini_response.get('nova_unidade_sigla')})",
+                'confianca': 'N/A'
+            })
+
+        else:
+            return JsonResponse({
+                'success': False,
+                'error': gemini_response.get("message", "Erro desconhecido na classificação de IA.")
+            }, status=500)
+
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': f'Erro interno no servidor: {str(e)}'}, status=500)
+    
+@login_required
+def cadastrar_item_inteligente_view(request):
+    PERFIS_PERMITIDOS = ['almoxarife_escritorio', 'diretor', 'engenheiro', 'almoxarife_obra']
+    if request.user.perfil not in PERFIS_PERMITIDOS:
+        messages.error(request, 'Acesso negado para o Cadastro Inteligente.')
+        return redirect('materiais:dashboard')
+
+    gemini_status = "OK"
+    gemini_message = "Pronto para usar a Classificação Inteligente."
+
+    try:
+        if not hasattr(gemini_service, 'gemini_model'):
+            gemini_status = "ERROR"
+            gemini_message = "Módulo de IA não está configurado corretamente. Contate o suporte."
+        elif not gemini_service.gemini_model:
+            gemini_status = "ERROR"
+            gemini_message = "A Chave GEMINI_API_KEY não está configurada corretamente no servidor. Contate o suporte."
+    except Exception as e:
+        gemini_status = "ERROR"
+        gemini_message = f"Erro de serviço Gemini: {str(e)}. Contate o suporte."
+
+    categorias_count = CategoriaItem.objects.filter(categoria_mae__isnull=True).count()
+    if categorias_count == 0:
+        messages.warning(request, 'Nenhuma categoria principal encontrada. Cadastre categorias antes de usar a classificação inteligente.')
+
+    context = {
+        'categorias_principais': CategoriaItem.objects.filter(categoria_mae__isnull=True).order_by('nome'),
+        'unidades': UnidadeMedida.objects.all().order_by('nome'),
+        'tags': Tag.objects.all().order_by('nome'),
+        'gemini_status': gemini_status,
+        'gemini_message': gemini_message,
+    }
+    return render(request, 'materiais/cadastrar_item_inteligente.html', context)
+
+
+def classify_item_with_gemini_safe(item_description: str, categories_list: str) -> dict:
+    try:
+        from . import gemini_service
+
+        if not hasattr(gemini_service, 'gemini_model') or not gemini_service.gemini_model:
+            return {
+                "status": "ERROR",
+                "message": "Serviço de IA não está disponível. Verifique a configuração da API."
+            }
+
+        if not item_description or not item_description.strip():
+            return {
+                "status": "ERROR",
+                "message": "Descrição do item não pode estar vazia."
+            }
+
+        if not categories_list or len(categories_list.strip()) < 10:
+            return {
+                "status": "ERROR",
+                "message": "Lista de categorias inválida ou vazia."
+            }
+
+        return gemini_service.classify_item_with_gemini(item_description, categories_list)
+
+    except ImportError:
+        return {
+            "status": "ERROR",
+            "message": "Módulo de IA não encontrado. Contate o suporte técnico."
+        }
+    except Exception as e:
+        return {
+            "status": "ERROR",
+            "message": f"Erro inesperado no serviço de IA: {str(e)}"
+        }
+
+
+@login_required
+@transaction.atomic
+def cadastrar_item_inteligente_submit(request):
+    PERFIS_PERMITIDOS = ['almoxarife_escritorio', 'diretor', 'engenheiro', 'almoxarife_obra']
+    if request.user.perfil not in PERFIS_PERMITIDOS:
+        messages.error(request, 'Acesso negado.')
+        return redirect('materiais:dashboard')
+
+    if request.method != 'POST':
+        return redirect('materiais:cadastrar_item_inteligente')
+
+    try:
+        descricao = request.POST.get('descricao', '').strip()
+        unidade_id = request.POST.get('unidade', '').strip()
+        tags_ids = request.POST.getlist('tags')
+        status_ativo = request.POST.get('status') == 'on'
+
+        subcategoria_id = request.POST.get('subcategoria_id_final', '').strip()
+        nova_categoria_mae = request.POST.get('nova_categoria_mae', '').strip()
+        nova_subcategoria = request.POST.get('nova_subcategoria', '').strip()
+
+        erros = []
+        if not descricao:
+            erros.append("A descrição do item é obrigatória.")
+        if not unidade_id:
+            erros.append("A unidade de medida é obrigatória.")
+        if not subcategoria_id and not (nova_categoria_mae and nova_subcategoria):
+            erros.append("É necessário selecionar uma categoria existente ou criar uma nova.")
+
+        if erros:
+            for erro in erros:
+                messages.error(request, erro)
+            return redirect('materiais:cadastrar_item_inteligente')
+
+        categoria_final_obj = None
+
+        if subcategoria_id:
+            try:
+                categoria_final_obj = get_object_or_404(CategoriaItem, id=subcategoria_id)
+            except Exception:
+                messages.error(request, "Categoria selecionada não encontrada.")
+                return redirect('materiais:cadastrar_item_inteligente')
+
+        elif nova_categoria_mae and nova_subcategoria:
+            categoria_mae_obj, mae_created = CategoriaItem.objects.get_or_create(
+                nome=nova_categoria_mae,
+                categoria_mae__isnull=True,
+                defaults={'nome': nova_categoria_mae}
+            )
+
+            categoria_final_obj, sub_created = CategoriaItem.objects.get_or_create(
+                nome=nova_subcategoria,
+                categoria_mae=categoria_mae_obj,
+                defaults={'nome': nova_subcategoria, 'categoria_mae': categoria_mae_obj}
+            )
+            if mae_created or sub_created:
+                messages.info(request, f"Nova Categoria '{categoria_final_obj}' criada automaticamente.")
+
+        if categoria_final_obj:
+            unidade_obj = get_object_or_404(UnidadeMedida, id=unidade_id)
+
+            if ItemCatalogo.objects.filter(descricao__iexact=descricao).exists():
+                messages.error(request, f'❌ Item com a descrição "{descricao}" já existe no catálogo.')
+                return redirect('materiais:cadastrar_item_inteligente')
+
+            novo_item = ItemCatalogo(
+                descricao=descricao,
+                categoria=categoria_final_obj,
+                unidade=unidade_obj,
+                ativo=status_ativo
+            )
+            novo_item.save()
+
+            if tags_ids:
+                novo_item.tags.set(tags_ids)
+
+            messages.success(request, f'✅ Item "{novo_item.descricao}" (Código: {novo_item.codigo}) cadastrado via Classificação Inteligente!')
+            return redirect('materiais:cadastrar_itens')
+        else:
+            messages.error(request, "Erro crítico na categorização. Item não pôde ser cadastrado.")
+            return redirect('materiais:cadastrar_item_inteligente')
+
+    except ValueError as ve:
+        messages.error(request, f'Erro de validação: {ve}')
+    except Exception as e:
+        messages.error(request, f'Erro inesperado ao cadastrar item: {str(e)}')
+
+    return redirect('materiais:cadastrar_item_inteligente')
