@@ -91,7 +91,8 @@ class CategoriaItem(models.Model):
         blank=True, 
         related_name='subcategorias'
     )
-
+    embedding = models.JSONField(null=True, blank=True, editable=False) # Armazenará o vetor numérico
+    
     def __str__(self):
         if self.categoria_mae:
             return f"{self.categoria_mae} -> {self.nome}"

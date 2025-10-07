@@ -2634,124 +2634,105 @@ def apagar_item(request, item_id):
     return redirect('materiais:cadastrar_itens')
 
 # FUNÇÃO CORRIGIDA PARA SUBSTITUIR NO views.py
+# No topo de materiais/views.py, adicione estas importações
+import numpy as np
+from django.db.models import Q
+import google.generativeai as genai
 
+import json
+from django.db import transaction
+from django.urls import reverse
 
-# [Em materiais/views.py, substitua o bloco completo de api_sugerir_categoria]
+# Novas importações necessárias
+import numpy as np
+import google.generativeai as genai
+from . import gemini_service
 
+# (Todas as suas outras views, como login_view, dashboard, etc., devem estar aqui)
+# ...
+
+# No topo de materiais/views.py, adicione ou confirme que estas importações existem
+from django.db.models import Q
+from . import gemini_service
+from .models import CategoriaItem, UnidadeMedida # E outros modelos que você já usa
+
+# E substitua a sua função api_sugerir_categoria por esta versão completa e final:
 @login_required
 @csrf_exempt
 def api_sugerir_categoria(request):
     PERFIS_PERMITIDOS = ['almoxarife_escritorio', 'diretor', 'engenheiro', 'almoxarife_obra']
     if request.user.perfil not in PERFIS_PERMITIDOS:
-        return JsonResponse({'success': False, 'error': 'Acesso negado para esta função de IA.'}, status=403)
+        return JsonResponse({'success': False, 'error': 'Acesso negado.'}, status=403)
     
-    # ... (Lógica de captura de descrição e validação de item_description) ...
-
-    # Captura a descrição conforme o método
-    if request.method == 'GET':
-        item_description = request.GET.get('descricao', '').strip()
-    else: # POST
-        item_description = request.POST.get('descricao', '').strip()
-        if not item_description:
-            try:
-                # Tenta JSON no body
-                data = json.loads(request.body)
-                item_description = data.get('descricao', '').strip()
-            except Exception:
-                pass
-    
+    item_description = request.GET.get('descricao', '').strip()
     if not item_description:
         return JsonResponse({'success': False, 'error': 'A descrição do item é obrigatória.'}, status=400)
     
     try:
-        # 1. Checagem de Serviço
-        if not hasattr(gemini_service, 'gemini_model') or not gemini_service.gemini_model:
-            return JsonResponse({'success': False, 'error': 'Serviço de IA não está disponível no momento. Contate o suporte.'}, status=503)
+        # --- ESTRATÉGIA DE PRÉ-FILTRAGEM NO DJANGO ---
 
-        # 2. Busca de categorias e unidades
-        categorias = CategoriaItem.objects.select_related('categoria_mae').filter(categoria_mae__isnull=False).all()
+        # 1. Extrai palavras-chave da descrição (ignora palavras pequenas)
+        keywords = [word for word in item_description.split() if len(word) > 2]
+        
+        # 2. Cria uma consulta OR para o banco de dados
+        category_query = Q()
+        for keyword in keywords:
+            category_query |= Q(nome__icontains=keyword) | Q(categoria_mae__nome__icontains=keyword)
+
+        # 3. Executa a busca, trazendo apenas categorias relevantes
+        categorias_filtradas = CategoriaItem.objects.select_related('categoria_mae').filter(
+            categoria_mae__isnull=False
+        ).filter(category_query)
+
+        # Se não encontrar nenhuma, usa todas como fallback (segurança)
+        if not categorias_filtradas.exists():
+            categorias_filtradas = CategoriaItem.objects.select_related('categoria_mae').filter(categoria_mae__isnull=False).all()
+
         unidades = UnidadeMedida.objects.all()
+
+        # 4. Monta o prompt CONCISO apenas com os resultados filtrados
+        categories_list = "CATEGORIAS RELEVANTES:\n" + "\n".join(
+            [f"{c.categoria_mae.nome} > {c.nome} (mae_id={c.categoria_mae_id}, sub_id={c.id})" for c in categorias_filtradas]
+        )
+        units_list = "\nUNIDADES:\n" + "\n".join(
+            [f"{u.sigla} (id={u.id})" for u in unidades]
+        )
         
-        if not categorias.exists() or not unidades.exists():
-            return JsonResponse({'success': False, 'error': 'Catálogo incompleto. Cadastre Categorias e Unidades.'}, status=400)
+        categories_and_units_list = categories_list + units_list
         
-        # 3. Formatar dados para o Gemini
-# materiais/views.py
+        # --- FIM DA ESTRATÉGIA ---
 
-        categories_list = "CATEGORIAS DISPONÍVEIS:\n{\n"
-        for cat in categorias:
-            # Altere "ID Categoria Mãe" e "SubID" para os nomes exatos das chaves
-            categories_list += f"  - categoria_mae_id: {cat.categoria_mae_id}, Nome: {cat.categoria_mae.nome} -> subcategoria_id: {cat.id}, Nome: {cat.nome}\n"
-        categories_list += "}\n\n"
-
-        units_list = "UNIDADES DE MEDIDA DISPONÍVEIS:\n{\n"
-        for unidade in unidades:
-            # Altere "ID Unidade" para o nome exato da chave
-            units_list += f"  - unidade_id: {unidade.id}, Nome: {unidade.nome}, Sigla: {unidade.sigla}\n"
-        units_list += "}"
+        gemini_response = gemini_service.classify_item_with_gemini(item_description, categories_and_units_list)
         
-        complete_data = categories_list + units_list
+        status = gemini_response.get("status")
 
-        # 4. Chama o serviço Gemini para classificação
-        gemini_response = gemini_service.classify_item_with_gemini(item_description, complete_data)
-
-        # 5. Processa a resposta
-        if gemini_response.get("status") == "EXISTENTE":
-            # Chave problemática do Gemini é 'categoria_id', que deveria ser 'subcategoria_id'
-            subcategoria_pk = gemini_response.get("subcategoria_id") 
-            unidade_pk = gemini_response.get("unidade_id")
-
-            try:
-                # Buscamos a subcategoria pelo ID (que o Gemini enviou com o nome errado)
-                subcategoria_obj = CategoriaItem.objects.select_related('categoria_mae').get(pk=subcategoria_pk)
-                unidade_obj = UnidadeMedida.objects.get(pk=unidade_pk)
-                
-                # Buscamos o ID da Categoria Mãe a partir da Subcategoria
-                categoria_mae_id = subcategoria_obj.categoria_mae_id
-                categoria_mae_obj = subcategoria_obj.categoria_mae
-                
-            except (CategoriaItem.DoesNotExist, UnidadeMedida.DoesNotExist, AttributeError):
-                # Se algum objeto não for encontrado no DB, a IA sugeriu um ID inválido
-                return JsonResponse({
-                    'success': False,
-                    'error': f"IA sugeriu IDs que não existem no DB (IDs: {subcategoria_pk}, {unidade_pk})."
-                }, status=400)
-
-
+        if status == "EXISTENTE":
+            subcategoria_obj = CategoriaItem.objects.select_related('categoria_mae').get(pk=gemini_response["subcategoria_id"])
+            unidade_obj = UnidadeMedida.objects.get(pk=gemini_response["unidade_id"])
+            if not subcategoria_obj.categoria_mae:
+                return JsonResponse({'success': False, 'error': 'A IA sugeriu uma Categoria Principal em vez de uma Subcategoria.'}, status=400)
             response_data = {
-                'success': True,
-                'status': 'EXISTENTE',
-                'categoria_sugerida': f"{categoria_mae_obj.nome} > {subcategoria_obj.nome}",
-                'unidade_sugerida': unidade_obj.sigla,
-                # IDs de retorno corrigidos para o que o frontend espera:
-                'categoria_mae_id': categoria_mae_id, 
-                'subcategoria_id': subcategoria_pk, # Este é o PK da Subcategoria
-                'unidade_id': unidade_pk
+                'success': True, 'status': 'EXISTENTE',
+                'categoria_mae_id': subcategoria_obj.categoria_mae_id, 
+                'subcategoria_id': subcategoria_obj.id,
+                'unidade_id': unidade_obj.id
             }
             return JsonResponse(response_data)
-
-        elif gemini_response.get("status") == "SUGERIR_NOVA":
-            # Lógica de Sugestão Nova
-            response_data = {
-                'success': True,
-                'status': 'SUGERIR_NOVA',
-                'categoria_sugerida': f"{gemini_response.get('nova_categoria_mae', 'N/A')} > {gemini_response.get('nova_subcategoria', 'N/A')}",
-                'unidade_sugerida': gemini_response.get('nova_unidade_sigla', 'N/A'),
-                'nova_categoria_mae': gemini_response.get('nova_categoria_mae'),
-                'nova_subcategoria': gemini_response.get('nova_subcategoria'),
-                'nova_unidade_sigla': gemini_response.get('nova_unidade_sigla'),
-            }
-            return JsonResponse(response_data)
+        
+        elif status == "SUGERIR_SUBCATEGORIA":
+            return JsonResponse({'success': True, **gemini_response})
+            
+        elif status == "SUGERIR_NOVA":
+            return JsonResponse({'success': True, **gemini_response})
         
         else:
-            # Resposta inválida ou erro interno do Gemini
-            return JsonResponse({
-                'success': False,
-                'error': gemini_response.get("message", "Resposta inválida ou erro de formato da IA.")
-            }, status=500)
+            return JsonResponse({'success': False, 'error': gemini_response.get("message", "Erro desconhecido da IA.")}, status=500)
 
+    except (CategoriaItem.DoesNotExist, UnidadeMedida.DoesNotExist):
+        return JsonResponse({'success': False, 'error': 'A IA sugeriu um ID de categoria ou unidade que não existe no banco de dados.'}, status=400)
     except Exception as e:
-        # Este bloco captura erros que não são do Gemini (ex: Falha de DB, quebra de Python)
+        import traceback
+        traceback.print_exc()
         return JsonResponse({'success': False, 'error': f'Erro interno no servidor: {str(e)}'}, status=500)
     
 @login_required

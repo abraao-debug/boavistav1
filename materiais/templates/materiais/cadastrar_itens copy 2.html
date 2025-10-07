@@ -1,0 +1,486 @@
+{% extends 'materiais/base.html' %}
+{% block title %}Cadastrar Itens do Catálogo{% endblock %}
+
+{% block content %}
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+
+<style>
+    /* Correção definitiva para o scroll e altura do dropdown */
+    .select2-results__options {
+        max-height: 350px !important; 
+        overflow-y: auto !important;
+    }
+    /* Adiciona estilo para a área de aviso */
+    #avisoSimilaridade {
+        min-height: 20px;
+        padding: 5px;
+        font-size: 0.9em;
+        transition: opacity 0.3s ease;
+    }
+    /* Estilos para o Modal de IA (simplificado) */
+    .modal-step-title { font-weight: 600; font-size: 1.1rem; }
+    .step-message { padding: 8px 12px; border-radius: 5px; margin-top: 10px; }
+    .step-message.loading { background-color: #f0f8ff; border: 1px solid #cce5ff; color: #004085; }
+    .step-message.error { background-color: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }
+    .step-message.success { background-color: #d4edda; border: 1px solid #c3e6cb; color: #155724; }
+
+    /* Estilo para a tarja colorida no formulário principal (opcional, para feedback visual) */
+    .form-sugestao-ia { border-left: 4px solid #0d6efd; padding-left: 10px; }
+</style>
+
+<div class="d-flex align-items-center mb-3">
+    <a href="{% url 'materiais:dashboard' %}" class="btn btn-secondary me-3">
+        <i class="fas fa-arrow-left"></i> Voltar
+    </a>
+    <div>
+        <h4 class="mb-0">Cadastrar Itens do Catálogo</h4>
+        <p class="text-muted mb-0">Gerenciar itens disponíveis para solicitação</p>
+    </div>
+</div>
+<hr class="mb-4">
+
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5><i class="fas fa-plus"></i> Novo Item</h5>
+        <button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#intelligentCadastroModal" id="btnOpenIACadastro" title="Cadastre usando a inteligência artificial">
+            <i class="fas fa-brain"></i> Cadastro Inteligente
+        </button>
+    </div>
+    <div class="card-body">
+        <form method="post" id="formCadastrarItem">
+            {% csrf_token %}
+            
+            {# Campo usado para forçar o cadastro após a confirmação de similaridade #}
+            <input type="hidden" name="forcar_cadastro" id="forcarCadastroInput" value="false">
+            
+            <div id="aiFillFeedback" class="d-none alert alert-info mb-4">
+                <i class="fas fa-magic me-2"></i> <strong>Sucesso!</strong> O formulário foi pré-preenchido pela IA. Revise e confirme o cadastro.
+            </div>
+
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="categoria" class="form-label">Categoria *</label>
+                    <select class="form-select" id="categoria" name="categoria" required>
+                        <option value="" selected>Selecione uma categoria...</option>
+                        {% for cat in categorias_principais %}
+                            <option value="{{ cat.id }}">{{ cat.nome }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label for="subcategoria" class="form-label">Subcategoria *</label>
+                    <select class="form-select" id="subcategoria" name="subcategoria" required disabled>
+                        <option value="">Aguardando seleção da Categoria...</option>
+                    </select>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-2 mb-3">
+                    <label class="form-label">Código</label>
+                    <input type="text" class="form-control" value="Automático" disabled>
+                </div>
+                <div class="col-md-10 mb-3">
+                    <label for="descricao" class="form-label">Descrição do Item *</label>
+                    <input type="text" class="form-control" id="descricao" name="descricao" required>
+                    {# Área de Aviso em tempo real para a similaridade do formulário padrão #}
+                    <div id="avisoSimilaridade" class="mt-2"></div> 
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label for="unidade" class="form-label">Unidade de Medida *</label>
+                    <select class="form-select" id="unidade" name="unidade" required>
+                        <option value="" selected>Selecione...</option>
+                        {% for u in unidades %}<option value="{{ u.id }}">{{ u.nome }} ({{ u.sigla }})</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-8 mb-3">
+                    <label for="tags" class="form-label">Tags (Opcional)</label>
+                    <select class="form-select" id="tags" name="tags" multiple>
+                        {% for tag in tags %}<option value="{{ tag.id }}">{{ tag.nome }}</option>{% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="form-check form-switch mb-3">
+              <input class="form-check-input" type="checkbox" name="status" id="status" checked>
+              <label class="form-check-label" for="status">Item Ativo (aparecerá para solicitações)</label>
+            </div>
+            <button type="submit" class="btn btn-success" id="submitBtn" disabled><i class="fas fa-save"></i> Cadastrar Item</button>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header"><h5><i class="fas fa-list"></i> Itens Cadastrados ({{ itens.count }})</h5></div>
+    <div class="card-body">
+        {% if itens %}
+            <div class="table-responsive">
+                <table class="table table-striped table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Código</th>
+                            <th>Descrição</th>
+                            <th>Categoria</th>
+                            <th>Subcategoria</th>
+                            <th class="text-center">Unidade</th>
+                            <th class="text-center">Status</th>
+                            <th class="text-center">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in itens %}
+                        <tr>
+                            <td>{{ item.codigo }}</td>
+                            <td><strong>{{ item.descricao }}</strong></td>
+                            <td>{{ item.categoria.categoria_mae.nome|default:"-" }}</td>
+                            <td>{{ item.categoria.nome|default:"-" }}</td>
+                            <td class="text-center">{{ item.unidade.sigla }}</td>
+                            <td class="text-center">{% if item.ativo %}<span class="badge bg-success">Ativo</span>{% else %}<span class="badge bg-danger">Inativo</span>{% endif %}</td>
+                            <td class="text-center">
+                                <a href="{% url 'materiais:editar_item' item.id %}" class="btn btn-sm btn-outline-primary" title="Editar Item"><i class="fas fa-edit"></i></a>
+                                
+                                {# NOVO BOTÃO DE EXCLUSÃO COM MODAL #}
+                                <button type="button" class="btn btn-sm btn-outline-danger" 
+                                        data-bs-toggle="modal" data-bs-target="#deletarItemModal" 
+                                        data-item-id="{{ item.id }}" 
+                                        data-item-descricao="{{ item.descricao }}"
+                                        title="Apagar Item">
+                                    <i class="fas fa-trash-alt"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="text-center text-muted p-4"><p>Nenhum item cadastrado ainda.</p></div>
+        {% endif %}
+    </div>
+</div>
+
+{# --- MODAL DE CONFIRMAÇÃO DE DUPLICIDADE (PADRÃO) --- #}
+<div class="modal fade" id="similaridadeModal" tabindex="-1" aria-labelledby="similaridadeModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title" id="similaridadeModalLabel"><i class="fas fa-exclamation-triangle"></i> Atenção: Item Semelhante Encontrado!</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>A descrição que você digitou é **muito semelhante** aos seguintes itens já cadastrados. Por favor, verifique se não é uma duplicação:</p>
+                <div id="listaItensSimilares" class="alert alert-light">
+                    {# Conteúdo será injetado pelo JS #}
+                </div>
+                <p class="mt-3">Deseja realmente cadastrar este item, ignorando o aviso de similaridade?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar Cadastro</button>
+                <button type="button" class="btn btn-warning" id="btnForcarCadastro">Sim, Cadastrar Mesmo Assim</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# --- MODAL DE CONFIRMAÇÃO DE DELEÇÃO (PADRÃO) --- #}
+<div class="modal fade" id="deletarItemModal" tabindex="-1" aria-labelledby="deletarItemModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="deletarItemModalLabel"><i class="fas fa-trash-alt"></i> Confirmação de Exclusão</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Você tem certeza que deseja <strong>apagar permanentemente</strong> o seguinte item do catálogo?</p>
+                <p class="mb-0"><strong>Item:</strong> <span id="itemDescricaoModal"></span></p>
+                <p class="text-danger mt-3">Esta ação <strong>não pode ser desfeita</strong>.</p>
+            </div>
+            <div class="modal-footer">
+                <form id="formDeletarItem" method="POST" action="">
+                    {% csrf_token %}
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-danger">Apagar Item</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# --- NOVO MODAL DE CADASTRO INTELIGENTE (IA) --- #}
+<div class="modal fade" id="intelligentCadastroModal" tabindex="-1" aria-labelledby="intelligentCadastroModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title" id="intelligentCadastroModalLabel"><i class="fas fa-brain me-2"></i> Cadastro Inteligente</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                
+                <div id="iaApiStatus" class="alert alert-danger" style="display:none;"></div>
+                
+                <div class="mb-4">
+                    <label for="aiDescriptionInput" class="form-label modal-step-title">1. Digite a Descrição do Item *</label>
+                    <input type="text" class="form-control form-control-lg" id="aiDescriptionInput" placeholder="Ex: Cabo flexível 2.5mm, Vaso sanitário Deca branco" required>
+                    <div id="aiCheckMessage" class="form-text mt-2"></div>
+                </div>
+
+                <div class="mb-4">
+                    <h6 class="modal-step-title mb-3">2. Etapas de Processamento</h6>
+                    <div id="iaProgressSteps">
+                        <div class="step-message loading"><i class="fas fa-search me-2"></i> Aguardando descrição para iniciar a verificação.</div>
+                    </div>
+                </div>
+                
+            </div>
+            <div class="modal-footer justify-content-between">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="aiCheckBtn" disabled>
+                    <i class="fas fa-check"></i> Checar e Classificar
+                </button>
+                <button type="button" class="btn btn-warning" id="aiConfirmSimilarityBtn" style="display:none;">
+                    Sim, Continuar (Similar)
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+
+{% block javascript %}
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // --- VARIÁVEIS DO FORMULÁRIO PRINCIPAL ---
+    const formCadastrarItem = document.getElementById('formCadastrarItem');
+    const descricaoInput = document.getElementById('descricao');
+    const categoriaSelect = document.getElementById('categoria');
+    const subcategoriaSelect = document.getElementById('subcategoria');
+    const unidadeSelect = document.getElementById('unidade');
+    const tagsSelect = document.getElementById('tags');
+    const forcarCadastroInput = document.getElementById('forcarCadastroInput');
+    const submitBtn = document.getElementById('submitBtn');
+    const aiFillFeedback = document.getElementById('aiFillFeedback');
+    
+    // --- VARIÁVEIS DO MODAL DE IA ---
+    const intelligentCadastroModal = new bootstrap.Modal(document.getElementById('intelligentCadastroModal'));
+    const aiDescriptionInput = document.getElementById('aiDescriptionInput');
+    const aiCheckBtn = document.getElementById('aiCheckBtn');
+    const aiProgressSteps = document.getElementById('iaProgressSteps');
+    const aiConfirmSimilarityBtn = document.getElementById('aiConfirmSimilarityBtn');
+
+    function initSelect2() {
+        $('#categoria').select2({ placeholder: "Selecione uma categoria..." });
+        $('#subcategoria').select2({ placeholder: "Aguardando seleção da Categoria..." });
+        $('#unidade').select2({ placeholder: "Selecione..." });
+        $('#tags').select2({ placeholder: "Selecione as tags" });
+    }
+    
+    initSelect2();
+
+    function updateSubmitBtnState() {
+        const isDescriptionValid = descricaoInput.value.trim().length >= 3;
+        const isCategoryValid = categoriaSelect.value !== '';
+        const isSubcategoryValid = subcategoriaSelect.value !== '' && !subcategoriaSelect.disabled;
+        const isUnitValid = unidadeSelect.value !== '';
+        submitBtn.disabled = !(isDescriptionValid && isCategoryValid && isSubcategoryValid && isUnitValid);
+    }
+
+    // --- LÓGICA DE CARREGAMENTO DE SUBCATEGORIAS (Refatorada com async/await) ---
+
+    async function loadAndSetSubcategories(categoriaId, subcategoriaToSelectId = null) {
+        const subcategoriaSelect = $('#subcategoria');
+        subcategoriaSelect.empty().prop('disabled', true);
+
+        if (!categoriaId) {
+            subcategoriaSelect.select2({ placeholder: "Aguardando seleção da Categoria..." });
+            return;
+        }
+
+        subcategoriaSelect.select2({ placeholder: "Carregando..." });
+
+        try {
+            const response = await fetch(`/api/subcategorias/${categoriaId}/`);
+            if (!response.ok) throw new Error('Falha ao carregar subcategorias');
+            
+            const data = await response.json();
+            
+            subcategoriaSelect.empty().append('<option value="" selected>Selecione uma subcategoria...</option>');
+            $.each(data, (i, sub) => subcategoriaSelect.append(new Option(sub.nome, sub.id)));
+            subcategoriaSelect.prop('disabled', false);
+
+            if (subcategoriaToSelectId) {
+                subcategoriaSelect.val(subcategoriaToSelectId);
+            }
+            
+            subcategoriaSelect.trigger('change');
+        } catch (error) {
+            console.error('Erro ao buscar subcategorias:', error);
+            subcategoriaSelect.select2({ placeholder: "Erro ao carregar" });
+        }
+    }
+
+    // Listener para quando o USUÁRIO muda a categoria manualmente
+    $('#categoria').on('change', function() {
+        const categoriaId = $(this).val();
+        loadAndSetSubcategories(categoriaId);
+        updateSubmitBtnState();
+    });
+    
+    $('#subcategoria, #unidade, #descricao').on('change input', updateSubmitBtnState);
+
+
+    // --- FUNÇÃO PRINCIPAL DE PREENCHIMENTO (Refatorada com async/await) ---
+    async function preFillMainForm(description, data) {
+        descricaoInput.value = description;
+        $(tagsSelect).val(null).trigger('change');
+
+        if (data.status === 'EXISTENTE') {
+            const catMaeId = data.categoria_mae_id;
+            const subCatId = data.subcategoria_id;
+            const unitId = data.unidade_id;
+
+            // Seleciona Categoria Mãe e dispara o change para Select2
+            $(categoriaSelect).val(catMaeId).trigger('change.select2');
+            
+            // ESPERA o carregamento das subcategorias e JÁ SELECIONA a correta
+            await loadAndSetSubcategories(catMaeId, subCatId);
+            
+            // AGORA, com a certeza de que tudo carregou, seleciona a unidade
+            $(unidadeSelect).val(unitId).trigger('change');
+            
+        } else if (data.status === 'SUGERIR_NOVA') {
+            alert(`ATENÇÃO: A IA sugeriu criar uma nova categoria: ${data.nova_categoria_mae} > ${data.nova_subcategoria}. Por favor, cadastre-as em 'Gerenciar Categorias' primeiro.`);
+            $(categoriaSelect).val('').trigger('change');
+        }
+        
+        updateSubmitBtnState();
+    }
+    
+    
+    // --- LÓGICA DO MODAL DE CADASTRO INTELIGENTE (O restante do seu código) ---
+    // (O código de startIntelligentCheck, addStepMessage, etc., continua aqui, sem alterações)
+    aiDescriptionInput.addEventListener('input', function() {
+        const description = this.value.trim();
+        aiCheckBtn.disabled = description.length < 5;
+        aiConfirmSimilarityBtn.style.display = 'none';
+        aiCheckBtn.innerHTML = '<i class="fas fa-check"></i> Checar e Classificar';
+        aiProgressSteps.innerHTML = '<div class="step-message loading"><i class="fas fa-search me-2"></i> Aguardando descrição para iniciar a verificação.</div>';
+    });
+
+    aiCheckBtn.addEventListener('click', startIntelligentCheck);
+    aiConfirmSimilarityBtn.addEventListener('click', startGeminiClassification);
+    
+    $('#intelligentCadastroModal').on('show.bs.modal', function() {
+        aiDescriptionInput.value = descricaoInput.value;
+        aiDescriptionInput.dispatchEvent(new Event('input'));
+    });
+
+    async function startIntelligentCheck() {
+        const description = aiDescriptionInput.value.trim();
+        aiCheckBtn.disabled = true;
+        aiConfirmSimilarityBtn.style.display = 'none';
+        aiProgressSteps.innerHTML = '';
+        addStepMessage('step-check', 'processing', '1. Verificando duplicidade no catálogo...', 'Verificação de similaridade e duplicidade exata.');
+        
+        try {
+            const checkUrl = `{% url 'materiais:api_item_check' %}?descricao=${encodeURIComponent(description)}`;
+            const checkResponse = await fetch(checkUrl).then(r => r.json());
+            
+            if (checkResponse.status === 'exact_duplicate') {
+                addStepMessage('step-check', 'error', '1. Verificação Concluída.', `❌ ERRO: Item idêntico já cadastrado!`);
+                aiCheckBtn.innerHTML = '<i class="fas fa-times"></i> Erro';
+                return;
+            } else if (checkResponse.status === 'similar') {
+                const listHtml = checkResponse.itens.map(item => `<li><strong>${item.descricao}</strong> (Cód: ${item.codigo}) - ${item.similaridade}%</li>`).join('');
+                addStepMessage('step-check', 'warning', '1. Item Similar Encontrado.', `⚠️ Similaridade Alta! Itens: <ul>${listHtml}</ul>`);
+                aiCheckBtn.style.display = 'none';
+                aiConfirmSimilarityBtn.style.display = 'block';
+                aiConfirmSimilarityBtn.innerHTML = 'Sim, Continuar (Similar)';
+                return;
+            }
+            
+            addStepMessage('step-check', 'success', '1. Verificação Concluída.', `✅ Item é único. Prosseguindo para a IA.`);
+            startGeminiClassification();
+        } catch (error) {
+            addStepMessage('step-check', 'error', '1. Erro de Verificação.', `Falha ao conectar: ${error.message}`);
+            aiCheckBtn.innerHTML = '<i class="fas fa-redo"></i> Tentar Novamente';
+            aiCheckBtn.disabled = false;
+        }
+    }
+    
+    async function startGeminiClassification() {
+        const description = aiDescriptionInput.value.trim();
+        aiConfirmSimilarityBtn.disabled = true;
+        aiConfirmSimilarityBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Classificando...';
+        aiCheckBtn.style.display = 'none';
+        
+        if (aiProgressSteps.querySelector('.step-message.warning')) {
+            addStepMessage('step-check', 'success', '1. Confirmação Recebida.', `✅ Usuário confirmou a similaridade.`);
+        }
+        
+        addStepMessage('step-gemini', 'processing', '2. Chamando a IA do Gemini...', 'Aguardando a sugestão de Categoria e Unidade...');
+
+        try {
+            const aiUrl = `{% url 'materiais:api_sugerir_categoria' %}?descricao=${encodeURIComponent(description)}`;
+            const geminiResponse = await fetch(aiUrl).then(r => r.json());
+            
+            if (!geminiResponse.success) {
+                addStepMessage('step-gemini', 'error', '2. Erro de Classificação.', `❌ ${geminiResponse.error}`);
+                throw new Error(geminiResponse.error);
+            }
+            
+            addStepMessage('step-gemini', 'success', '2. Sugestão Recebida.', `Status: ${geminiResponse.status}. Pré-preenchendo o formulário principal.`);
+            
+            preFillMainForm(description, geminiResponse);
+            
+            intelligentCadastroModal.hide();
+            aiFillFeedback.classList.remove('d-none');
+            
+            aiCheckBtn.disabled = false;
+            aiCheckBtn.style.display = 'block';
+            aiConfirmSimilarityBtn.style.display = 'none';
+            aiConfirmSimilarityBtn.disabled = false;
+            
+        } catch (error) {
+            addStepMessage('step-gemini', 'error', '2. Falha Crítica.', `Erro na classificação ou comunicação: ${error.message}`);
+            aiCheckBtn.style.display = 'block';
+            aiCheckBtn.innerHTML = '<i class="fas fa-redo"></i> Tentar Novamente';
+            aiConfirmSimilarityBtn.style.display = 'none';
+        }
+    }
+
+    function addStepMessage(id, status, title, details) {
+        const stepHtml = `<div class="step-message ${status}" id="${id}"><p class="mb-0">
+            ${status === 'processing' ? '<span class="spinner-border spinner-border-sm me-2"></span>' : ''}
+            <strong>${title}</strong></p>
+            <p class="small text-muted mb-0">${details}</p>
+        </div>`;
+        
+        const existing = aiProgressSteps.querySelector(`#${id}`);
+        if (existing) {
+             existing.outerHTML = stepHtml;
+        } else {
+            aiProgressSteps.innerHTML += stepHtml;
+        }
+    }
+
+    // --- LÓGICA DE EXCLUSÃO (Mantida) ---
+    const deletarItemModalElement = document.getElementById('deletarItemModal');
+    if (deletarItemModalElement) {
+        deletarItemModalElement.addEventListener('show.bs.modal', function (event) {
+            const button = event.relatedTarget;
+            const itemId = button.getAttribute('data-item-id');
+            const itemDescricao = button.getAttribute('data-item-descricao');
+            const itemDescricaoSpan = deletarItemModalElement.querySelector('#itemDescricaoModal');
+            const formAction = deletarItemModalElement.querySelector('#formDeletarItem');
+            itemDescricaoSpan.textContent = itemDescricao;
+            formAction.action = `{% url 'materiais:apagar_item' 0 %}`.replace('0', itemId);
+        });
+    }
+    
+    // As demais lógicas de similaridade e submit do formulário padrão podem ser mantidas.
+});
+</script>
+{% endblock %}

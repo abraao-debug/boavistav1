@@ -10,14 +10,37 @@ class Command(BaseCommand):
         # 1. Popula Unidades de Medida (sem alterações)
         self.stdout.write('Verificando Unidades de Medida...')
         unidades = [
-            {'nome': 'Unidade', 'sigla': 'UN'}, {'nome': 'Metro', 'sigla': 'M'},
-            {'nome': 'Metro Quadrado', 'sigla': 'M²'}, {'nome': 'Metro Cúbico', 'sigla': 'M³'},
-            {'nome': 'Vara', 'sigla': 'VARA'}, {'nome': 'Dúzia', 'sigla': 'DZ'},
-            {'nome': 'Saco', 'sigla': 'SC'}, {'nome': 'Tonelada', 'sigla': 'TON'},
-            {'nome': 'Pacote', 'sigla': 'PCT'}, {'nome': 'Litro', 'sigla': 'L'},
-            {'nome': 'Quilograma', 'sigla': 'KG'}, {'nome': 'Lata', 'sigla': 'LATA'},
-            {'nome': 'Caixa', 'sigla': 'CX'}, {'nome': 'Rolo', 'sigla': 'ROLO'},
+            # --- Unidades existentes ---
+            {'nome': 'Unidade', 'sigla': 'UN'},
+            {'nome': 'Metro', 'sigla': 'M'},
+            {'nome': 'Metro Quadrado', 'sigla': 'M²'},
+            {'nome': 'Metro Cúbico', 'sigla': 'M³'},
+            {'nome': 'Vara', 'sigla': 'VARA'},
+            {'nome': 'Dúzia', 'sigla': 'DZ'},
+            {'nome': 'Saco', 'sigla': 'SC'},
+            {'nome': 'Tonelada', 'sigla': 'TON'},
+            {'nome': 'Pacote', 'sigla': 'PCT'},
+            {'nome': 'Litro', 'sigla': 'L'},
+            {'nome': 'Quilograma', 'sigla': 'KG'},
+            {'nome': 'Lata', 'sigla': 'LATA'},
+            {'nome': 'Caixa', 'sigla': 'CX'},
+            {'nome': 'Rolo', 'sigla': 'ROLO'},
             {'nome': 'Peça', 'sigla': 'PÇ'},
+
+            # --- Novas Sugestões ---
+            {'nome': 'Vergalhão', 'sigla': 'VG'},      # Para barras de aço de diferentes diâmetros.
+            {'nome': 'Folha', 'sigla': 'FL'},          # Para chapas de compensado, gesso (drywall), etc.
+            {'nome': 'Par', 'sigla': 'PAR'},          # Para itens vendidos em pares (ex: luvas, botas).
+            {'nome': 'Jogo', 'sigla': 'JG'},           # Para conjuntos de ferramentas ou kits.
+            {'nome': 'Balde', 'sigla': 'BD'},          # Para tintas, massas e argamassas.
+            {'nome': 'Cento', 'sigla': 'CENTO'},      # Para tijolos, blocos (compra por centenas).
+            {'nome': 'Milheiro', 'sigla': 'MIL'},      # Para grandes quantidades de tijolos ou blocos.
+            {'nome': 'Barra', 'sigla': 'BAR'},
+            {'nome': 'Conexão', 'sigla': 'CON'},
+            {'nome': 'Galão', 'sigla': 'GL'}
+
+          # Para diárias de serviços ou aluguel de equipamentos.
+
         ]
         for unidade in unidades:
             obj, created = UnidadeMedida.objects.get_or_create(sigla=unidade['sigla'], defaults={'nome': unidade['nome']})
