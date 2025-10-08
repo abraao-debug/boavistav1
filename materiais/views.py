@@ -15,6 +15,7 @@ from .forms import SolicitacaoCompraForm
 from django.db.models import Case, When, Value, IntegerField
 from decimal import Decimal
 from . import rm_config
+import numpy as np
 from . import gemini_service
 from .models import (
     User, SolicitacaoCompra, ItemSolicitacao, Fornecedor, ItemCatalogo, 
@@ -736,10 +737,71 @@ def historico_recebimentos(request):
 
 @login_required
 def cadastrar_itens(request):
-    # PERMISSÃO AMPLIADA PARA ENGENHEIRO
+    # PERMISSÃO AMPLIADA PARA ENGENHEIRO E ALMOXARIFE DE OBRA
     if request.user.perfil not in ['almoxarife_escritorio', 'diretor', 'engenheiro','almoxarife_obra']:
         messages.error(request, 'Acesso negado. Apenas o escritório ou diretoria pode cadastrar itens.')
         return redirect('materiais:dashboard')
+
+    # --- INÍCIO DA LÓGICA DE FILTROS, ORDENAÇÃO E PAGINAÇÃO ---
+    termo_busca = request.GET.get('q', '').strip()
+    sort_by = request.GET.get('sort', 'descricao') # Padrão: descrição
+    direction = request.GET.get('dir', 'asc')       # Padrão: A-Z
+    page = request.GET.get('page')
+    per_page_str = request.GET.get('per_page', '25') # Padrão: 25 itens
+
+    try:
+        per_page = int(per_page_str)
+        if per_page not in [10, 25, 50, 100]:
+            per_page = 25
+    except ValueError:
+        per_page = 25
+    
+    # 1. Query Base
+    # Uso de select_related para otimizar as buscas de Categoria, Subcategoria e Unidade
+    base_query = ItemCatalogo.objects.filter(
+        # Filtra apenas itens que têm subcategoria (para não aparecer categorias "mães" acidentais)
+        categoria__categoria_mae__isnull=False 
+    ).select_related(
+        'categoria__categoria_mae', 
+        'unidade'
+    )
+    
+    # 2. Aplica Busca (q)
+    if termo_busca:
+        base_query = base_query.filter(
+            Q(codigo__icontains=termo_busca) |
+            Q(descricao__icontains=termo_busca) |
+            Q(categoria__nome__icontains=termo_busca) | # Subcategoria
+            Q(categoria__categoria_mae__nome__icontains=termo_busca) | # Categoria Principal
+            Q(unidade__sigla__icontains=termo_busca)
+        ).distinct() # Distinct para evitar duplicidade causada pelo Q
+    
+    # 3. Aplica Ordenação
+    # Mapeamento de campos de front-end para campos do modelo
+    valid_sort_fields = {
+        'codigo': 'codigo',
+        'descricao': 'descricao',
+        'categoria_mae': 'categoria__categoria_mae__nome',
+        'subcategoria': 'categoria__nome',
+        'unidade': 'unidade__sigla',
+        'ativo': 'ativo',
+    }
+    
+    order_field = valid_sort_fields.get(sort_by, 'descricao')
+    order = f'-{order_field}' if direction == 'desc' else order_field
+
+    itens_list = base_query.order_by(order)
+    
+    # 4. Paginação
+    paginator = Paginator(itens_list, per_page)
+    try:
+        itens_paginados = paginator.page(page)
+    except PageNotAnInteger:
+        itens_paginados = paginator.page(1)
+    except EmptyPage:
+        itens_paginados = paginator.page(paginator.num_pages)
+    
+    # --- FIM DA LÓGICA DE FILTROS, ORDENAÇÃO E PAGINAÇÃO ---
 
     # AJUSTE: Filtra apenas categorias principais que TÊM subcategorias
     categorias_principais_list = CategoriaItem.objects.filter(categoria_mae__isnull=True, subcategorias__isnull=False).distinct().order_by('nome')
@@ -748,7 +810,6 @@ def cadastrar_itens(request):
     tags_list = Tag.objects.all().order_by('nome')
 
     if request.method == 'POST':
-        # ... (o resto da lógica POST permanece igual) ...
         subcategoria_id = request.POST.get('subcategoria')
         descricao = request.POST.get('descricao')
         unidade_id = request.POST.get('unidade')
@@ -766,29 +827,34 @@ def cadastrar_itens(request):
         if not unidade_id:
             erros.append("O campo 'Unidade de Medida' é obrigatório.")
 
+        # Contexto de erro (Note que 'itens' usa a lista paginada)
         contexto_erro = {
-            'itens': ItemCatalogo.objects.select_related('categoria', 'unidade').order_by('-id'),
+            'itens': itens_paginados, 
             'categorias_principais': categorias_principais_list,
             'unidades': unidades_list,
             'tags': tags_list,
-            'form_data': request.POST
+            'form_data': request.POST,
+            'search_query': termo_busca,
+            'current_sort': sort_by,
+            'current_dir': direction,
+            'per_page': per_page,
+            'per_page_options': [10, 25, 50, 100],
         }
+        
+        # O backend verifica o submit forçado para permitir duplicação
+        if ItemCatalogo.objects.filter(descricao__iexact=descricao).exists() and not forcar_cadastro:
+            messages.error(request, f'❌ Já existe um item com a descrição "{descricao}"!')
+            return render(request, 'materiais/cadastrar_itens.html', contexto_erro)
         
         if erros:
             for erro in erros:
                 messages.error(request, erro)
             return render(request, 'materiais/cadastrar_itens.html', contexto_erro)
         
-        if ItemCatalogo.objects.filter(descricao__iexact=descricao).exists():
-            messages.error(request, f'❌ Já existe um item com a descrição "{descricao}"!')
-            return render(request, 'materiais/cadastrar_itens.html', contexto_erro)
-        
-
-        
         try:
             categoria_final_obj = get_object_or_404(CategoriaItem, id=subcategoria_id)
             unidade_obj = get_object_or_404(UnidadeMedida, id=unidade_id)
-
+            
             novo_item = ItemCatalogo(
                 descricao=descricao,
                 categoria=categoria_final_obj,
@@ -806,11 +872,18 @@ def cadastrar_itens(request):
             messages.error(request, f'Ocorreu um erro ao salvar o item: {e}')
             return render(request, 'materiais/cadastrar_itens.html', contexto_erro)
 
+
+    # Contexto para a renderização GET (e em caso de erro)
     context = {
-        'itens': ItemCatalogo.objects.select_related('categoria', 'unidade').order_by('-id'),
+        'itens': itens_paginados, # Objeto Paginado
         'categorias_principais': categorias_principais_list,
         'unidades': unidades_list,
-        'tags': tags_list
+        'tags': tags_list,
+        'search_query': termo_busca,
+        'current_sort': sort_by,
+        'current_dir': direction,
+        'per_page': per_page,
+        'per_page_options': [10, 25, 50, 100],
     }
     return render(request, 'materiais/cadastrar_itens.html', context)
 
@@ -1914,18 +1987,22 @@ def enviar_rm_fornecedor(request, rm_id):
         return redirect('materiais:gerenciar_requisicoes')
 
     if request.method == 'POST':
-        # --- INÍCIO DA LÓGICA ADICIONADA E MODIFICADA ---
-        # Usamos uma transação para garantir que todas as operações funcionem ou nenhuma
+        # --- NOVO: CAPTURA E SALVA O HEADER ESCOLHIDO ---
+        header_choice = request.POST.get('header_choice', 'A') 
+        
+        # Inicia a transação
         with transaction.atomic():
-            # 1. Pega a SC original
             solicitacao = rm.solicitacao_origem
 
-            # 2. Atualiza a RM (como já fazia antes)
+            # 1. Atualiza e salva o campo do cabeçalho antes de alterar o status
+            rm.header_choice = header_choice
+            
+            # 2. Atualiza o status da RM para envio
             rm.status_assinatura = 'enviada'
             rm.enviada_fornecedor = True
             rm.data_envio_fornecedor = timezone.now()
-            rm.save()
-
+            rm.save() # Salva o campo header_choice
+            
             # 3. ATUALIZA O STATUS DA SC ORIGINAL PARA "A CAMINHO"
             solicitacao.status = 'a_caminho'
             solicitacao.save()
@@ -1935,23 +2012,19 @@ def enviar_rm_fornecedor(request, rm_id):
                 solicitacao=solicitacao,
                 usuario=request.user,
                 acao="Material a Caminho",
-                detalhes=f"A RM {rm.numero} foi enviada para o fornecedor {rm.cotacao_vencedora.fornecedor.nome_fantasia}."
+                detalhes=f"A RM {rm.numero} foi enviada para o fornecedor {rm.cotacao_vencedora.fornecedor.nome_fantasia}. Cabeçalho utilizado: {header_choice}."
             )
-        # --- FIM DA LÓGICA ADICIONADA E MODIFICADA ---
         
-        messages.success(request, f'Envio da RM {rm.numero} confirmado com sucesso!')
+        messages.success(request, f'Envio da RM {rm.numero} confirmado com sucesso! Cabeçalho {header_choice} utilizado.')
         return redirect('materiais:gerenciar_requisicoes')
 
+    # --- Adiciona a lista de opções de headers ao contexto GET ---
+    from . import rm_config
     context = {
-        'rm': rm
+        'rm': rm,
+        'header_choices': rm_config.HEADER_CHOICES,
     }
     return render(request, 'materiais/enviar_rm.html', context)
-
-# NOVA VIEW DE API PARA OS DROPDOWNS EM CASCATA
-def api_subcategorias(request, categoria_id):
-    subcategorias = CategoriaItem.objects.filter(categoria_mae_id=categoria_id).order_by('nome')
-    data = [{'id': sub.id, 'nome': sub.nome} for sub in subcategorias]
-    return JsonResponse(data, safe=False)
 
 @login_required
 def editar_item(request, item_id):
@@ -1999,7 +2072,7 @@ def editar_item(request, item_id):
     }
     return render(request, 'materiais/editar_item.html', context)
 
-login_required
+@login_required
 def visualizar_rm_pdf(request, rm_id):
     rm = get_object_or_404(
         RequisicaoMaterial.objects.select_related(
@@ -2010,6 +2083,13 @@ def visualizar_rm_pdf(request, rm_id):
         ), 
         id=rm_id
     )
+
+    # Lógica de seleção do cabeçalho
+    # O parâmetro 'header' da URL tem precedência sobre o valor salvo no RM.
+    header_key = request.GET.get('header', rm.header_choice or 'A') 
+    
+    # Busca os dados da empresa no dicionário DADOS_EMPRESAS.
+    empresa_data = rm_config.DADOS_EMPRESAS.get(header_key, rm_config.DADOS_EMPRESA) 
 
     # ===================================================================
     # INÍCIO DA LINHA ADICIONADA: Calcula o subtotal apenas dos itens
@@ -2024,8 +2104,8 @@ def visualizar_rm_pdf(request, rm_id):
         'solicitacao': rm.solicitacao_origem,
         'fornecedor': rm.cotacao_vencedora.fornecedor,
         'itens_cotados': rm.cotacao_vencedora.itens_cotados.select_related('item_solicitacao').all(),
-        'empresa': rm_config.DADOS_EMPRESA,
-        'subtotal_itens': subtotal_itens, # <-- Adiciona o valor ao contexto
+        'empresa': empresa_data, # <-- Usa o cabeçalho dinâmico
+        'subtotal_itens': subtotal_itens, 
     }
     
     html_string = render_to_string('materiais/rm_pdf_template.html', context)
@@ -2635,7 +2715,6 @@ def apagar_item(request, item_id):
 
 # FUNÇÃO CORRIGIDA PARA SUBSTITUIR NO views.py
 # No topo de materiais/views.py, adicione estas importações
-import numpy as np
 from django.db.models import Q
 import google.generativeai as genai
 
@@ -2644,7 +2723,6 @@ from django.db import transaction
 from django.urls import reverse
 
 # Novas importações necessárias
-import numpy as np
 import google.generativeai as genai
 from . import gemini_service
 
@@ -2655,7 +2733,7 @@ from . import gemini_service
 from django.db.models import Q
 from . import gemini_service
 from .models import CategoriaItem, UnidadeMedida # E outros modelos que você já usa
-
+import math
 # E substitua a sua função api_sugerir_categoria por esta versão completa e final:
 @login_required
 @csrf_exempt
@@ -2669,48 +2747,84 @@ def api_sugerir_categoria(request):
         return JsonResponse({'success': False, 'error': 'A descrição do item é obrigatória.'}, status=400)
     
     try:
-        # --- ESTRATÉGIA DE PRÉ-FILTRAGEM NO DJANGO ---
+        # 1. GERA O EMBEDDING DO ITEM DE ENTRADA
+        input_embedding_vector = gemini_service.get_embedding_for_text(item_description)
+        if input_embedding_vector is None:
+            return JsonResponse({'success': False, 'error': 'Falha ao gerar embedding para o item. Verifique a chave da API e se o modelo de embedding está configurado.'}, status=500)
 
-        # 1. Extrai palavras-chave da descrição (ignora palavras pequenas)
-        keywords = [word for word in item_description.split() if len(word) > 2]
+        # Converte o vetor de entrada para ser comparável
+        input_vector = input_embedding_vector
         
-        # 2. Cria uma consulta OR para o banco de dados
-        category_query = Q()
-        for keyword in keywords:
-            category_query |= Q(nome__icontains=keyword) | Q(categoria_mae__nome__icontains=keyword)
-
-        # 3. Executa a busca, trazendo apenas categorias relevantes
-        categorias_filtradas = CategoriaItem.objects.select_related('categoria_mae').filter(
+        # 2. CALCULA A SIMILARIDADE DE COSSENO COM TODAS AS CATEGORIAS
+        
+        # Puxa apenas categorias que são subcategorias (têm embedding e categoria mãe)
+        all_categories = CategoriaItem.objects.select_related('categoria_mae').filter(
             categoria_mae__isnull=False
-        ).filter(category_query)
+        ).exclude(embedding__isnull=True)
+        
+        scores = []
+        
+        # Magnitude do vetor de entrada (para a fórmula do cosseno)
+        magnitude_input = math.sqrt(sum(x*x for x in input_vector))
 
-        # Se não encontrar nenhuma, usa todas como fallback (segurança)
-        if not categorias_filtradas.exists():
-            categorias_filtradas = CategoriaItem.objects.select_related('categoria_mae').filter(categoria_mae__isnull=False).all()
+        for category in all_categories:
+            db_vector = category.embedding
+            if not db_vector:
+                continue
 
-        unidades = UnidadeMedida.objects.all()
+            # Produto escalar (Dot Product): A . B
+            dot_product = sum(a * b for a, b in zip(input_vector, db_vector))
+            
+            # Magnitude do vetor do DB: ||B||
+            magnitude_db = math.sqrt(sum(x*x for x in db_vector))
+            
+            # Similaridade de Cosseno: (A . B) / (||A|| * ||B||)
+            if magnitude_input * magnitude_db != 0:
+                similarity_score = dot_product / (magnitude_input * magnitude_db)
+            else:
+                similarity_score = 0.0
 
-        # 4. Monta o prompt CONCISO apenas com os resultados filtrados
-        categories_list = "CATEGORIAS RELEVANTES:\n" + "\n".join(
-            [f"{c.categoria_mae.nome} > {c.nome} (mae_id={c.categoria_mae_id}, sub_id={c.id})" for c in categorias_filtradas]
-        )
-        units_list = "\nUNIDADES:\n" + "\n".join(
-            [f"{u.sigla} (id={u.id})" for u in unidades]
+            scores.append({
+                'score': similarity_score,
+                'id': category.id,
+                'mae_id': category.categoria_mae_id,
+                'nome': str(category),
+            })
+
+        # 3. FILTRA OS TOP 3 RESULTADOS POR SIMILARIDADE
+        scores.sort(key=lambda x: x['score'], reverse=True)
+        top_candidates = scores[:3]
+        
+        if not top_candidates or top_candidates[0]['score'] < 0.65:
+            # Se a melhor similaridade for baixa, enviamos apenas um prompt genérico
+            top_candidates_list = "Nenhum candidato com alta similaridade encontrado."
+        else:
+            # Envia a lista dos melhores candidatos para o Gemini validar/escolher
+            top_candidates_list = "Candidatos:\n" + "\n".join(
+                [f"Subcategoria: {c['nome']} (mae_id={c['mae_id']}, sub_id={c['id']}, Score={c['score']:.2f})" for c in top_candidates]
+            )
+
+        # 4. MONTA A LISTA DE UNIDADES (para o Gemini sugerir a melhor unidade)
+        units = UnidadeMedida.objects.all()
+        units_list = "\nUnidades:\n" + "\n".join(
+            [f"{u.sigla} (id={u.id})" for u in units]
         )
         
-        categories_and_units_list = categories_list + units_list
-        
-        # --- FIM DA ESTRATÉGIA ---
-
-        gemini_response = gemini_service.classify_item_with_gemini(item_description, categories_and_units_list)
+        # 5. CHAMA O GEMINI PARA VALIDAÇÃO FINAL
+        gemini_response = gemini_service.classify_item_with_gemini(
+            item_description, top_candidates_list, units_list
+        )
         
         status = gemini_response.get("status")
 
         if status == "EXISTENTE":
+            # Revalida o ID contra o banco de dados (segurança)
             subcategoria_obj = CategoriaItem.objects.select_related('categoria_mae').get(pk=gemini_response["subcategoria_id"])
             unidade_obj = UnidadeMedida.objects.get(pk=gemini_response["unidade_id"])
-            if not subcategoria_obj.categoria_mae:
-                return JsonResponse({'success': False, 'error': 'A IA sugeriu uma Categoria Principal em vez de uma Subcategoria.'}, status=400)
+            
+            if subcategoria_obj.categoria_mae is None:
+                return JsonResponse({'success': False, 'error': 'A IA sugeriu uma Categoria Principal em vez de uma Subcategoria existente.'}, status=400)
+                
             response_data = {
                 'success': True, 'status': 'EXISTENTE',
                 'categoria_mae_id': subcategoria_obj.categoria_mae_id, 
@@ -2719,10 +2833,7 @@ def api_sugerir_categoria(request):
             }
             return JsonResponse(response_data)
         
-        elif status == "SUGERIR_SUBCATEGORIA":
-            return JsonResponse({'success': True, **gemini_response})
-            
-        elif status == "SUGERIR_NOVA":
+        elif status == "SUGERIR_SUBCATEGORIA" or status == "SUGERIR_NOVA":
             return JsonResponse({'success': True, **gemini_response})
         
         else:
@@ -2894,3 +3005,10 @@ def cadastrar_item_inteligente_submit(request):
         messages.error(request, f'Erro inesperado ao cadastrar item: {str(e)}')
 
     return redirect('materiais:cadastrar_item_inteligente')
+
+@login_required
+def api_subcategorias(request, categoria_id):
+    # Certifique-se de que a importação de CategoriaItem está no cabeçalho
+    subcategorias = CategoriaItem.objects.filter(categoria_mae_id=categoria_id).order_by('nome')
+    data = [{'id': sub.id, 'nome': sub.nome} for sub in subcategorias]
+    return JsonResponse(data, safe=False)

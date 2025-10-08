@@ -1,5 +1,5 @@
 {% extends 'materiais/base.html' %}
-{% block title %}Cadastrar Itens do Catálogo{% endblock %}
+{% load materiais_extras %} {% block title %}Cadastrar Itens do Catálogo{% endblock %}
 
 {% block content %}
 <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
@@ -14,6 +14,10 @@
         font-size: 0.9em;
         transition: opacity 0.3s ease;
     }
+    /* Estilos para ordenação */
+    .sortable a { text-decoration: none; color: inherit; font-weight: bold; }
+    .sortable a:hover { color: #0d6efd; }
+    .sort-icon { display: inline-block; width: 1em; text-align: center; color: #0d6efd; }
 </style>
 
 <div class="d-flex align-items-center mb-3">
@@ -91,22 +95,78 @@
     </div>
 </div>
 
-<div class="card">
-    <div class="card-header"><h5><i class="fas fa-list"></i> Itens Cadastrados ({{ itens.count }})</h5></div>
+<div class="card mb-4">
+    <div class="card-header"><h5><i class="fas fa-search"></i> Filtrar Itens Cadastrados</h5></div>
     <div class="card-body">
-        {% if itens %}
+        <form method="GET" id="formFiltros" class="d-flex align-items-end">
+            <div class="flex-grow-1 me-3">
+                <label for="q_busca" class="form-label">Buscar (Código, Descrição, Categoria, Unidade)</label>
+                <input type="text" name="q" id="q_busca" class="form-control" value="{{ search_query }}" placeholder="Digite uma palavra-chave...">
+            </div>
+            <button type="submit" class="btn btn-primary me-2"><i class="fas fa-search"></i> Buscar</button>
+            <a href="{% url 'materiais:cadastrar_itens' %}" class="btn btn-outline-secondary"><i class="fas fa-times"></i> Limpar</a>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header"><h5><i class="fas fa-list"></i> Itens Cadastrados ({{ itens.paginator.count }})</h5></div>
+    <div class="card-body">
+        {% if itens.paginator.count > 0 %}
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <p class="text-muted mb-0">
+                    Mostrando {{ itens.start_index }} a {{ itens.end_index }} de {{ itens.paginator.count }} itens.
+                </p>
+                <form method="GET" id="formPerpage" class="d-flex align-items-center">
+                    <input type="hidden" name="q" value="{{ search_query }}">
+                    <input type="hidden" name="sort" value="{{ current_sort }}">
+                    <input type="hidden" name="dir" value="{{ current_dir }}">
+                    <label for="per_page" class="form-label me-2 mb-0">Mostrar:</label>
+                    <select name="per_page" id="per_page" class="form-select form-select-sm" style="width: auto;">
+                        {% for num in per_page_options %}
+                            <option value="{{ num }}" {% if num == per_page %}selected{% endif %}>{{ num }}</option>
+                        {% endfor %}
+                    </select>
+                </form>
+            </div>
             <div class="table-responsive">
                 <table class="table table-striped table-hover">
-                    <thead>
+                    <thead class="table-light">
+                        {% with base_url=request.path url_params=request.GET.urlencode|remove_param:'sort,dir,page' %}
                         <tr>
-                            <th>Código</th>
-                            <th>Descrição</th>
-                            <th>Categoria</th>
-                            <th>Subcategoria</th>
-                            <th class="text-center">Unidade</th>
-                            <th class="text-center">Status</th>
+                            <th class="sortable">
+                                <a href="?sort=codigo&dir={% if current_sort == 'codigo' and current_dir == 'asc' %}desc{% else %}asc{% endif %}&{{ url_params }}">
+                                    Código <span class="sort-icon">{% if current_sort == 'codigo' %}{% if current_dir == 'asc' %}&#9650;{% else %}&#9660;{% endif %}{% endif %}</span>
+                                </a>
+                            </th>
+                            <th class="sortable">
+                                <a href="?sort=descricao&dir={% if current_sort == 'descricao' and current_dir == 'asc' %}desc{% else %}asc{% endif %}&{{ url_params }}">
+                                    Descrição <span class="sort-icon">{% if current_sort == 'descricao' or not current_sort %}{% if current_dir == 'asc' %}&#9650;{% else %}&#9660;{% endif %}{% endif %}</span>
+                                </a>
+                            </th>
+                            <th class="sortable">
+                                <a href="?sort=categoria_mae&dir={% if current_sort == 'categoria_mae' and current_dir == 'asc' %}desc{% else %}asc{% endif %}&{{ url_params }}">
+                                    Categoria <span class="sort-icon">{% if current_sort == 'categoria_mae' %}{% if current_dir == 'asc' %}&#9650;{% else %}&#9660;{% endif %}{% endif %}</span>
+                                </a>
+                            </th>
+                            <th class="sortable">
+                                <a href="?sort=subcategoria&dir={% if current_sort == 'subcategoria' and current_dir == 'asc' %}desc{% else %}asc{% endif %}&{{ url_params }}">
+                                    Subcategoria <span class="sort-icon">{% if current_sort == 'subcategoria' %}{% if current_dir == 'asc' %}&#9650;{% else %}&#9660;{% endif %}{% endif %}</span>
+                                </a>
+                            </th>
+                            <th class="text-center sortable">
+                                <a href="?sort=unidade&dir={% if current_sort == 'unidade' and current_dir == 'asc' %}desc{% else %}asc{% endif %}&{{ url_params }}">
+                                    Unid. <span class="sort-icon">{% if current_sort == 'unidade' %}{% if current_dir == 'asc' %}&#9650;{% else %}&#9660;{% endif %}{% endif %}</span>
+                                </a>
+                            </th>
+                            <th class="text-center sortable">
+                                <a href="?sort=ativo&dir={% if current_sort == 'ativo' and current_dir == 'asc' %}desc{% else %}asc{% endif %}&{{ url_params }}">
+                                    Status <span class="sort-icon">{% if current_sort == 'ativo' %}{% if current_dir == 'asc' %}&#9650;{% else %}&#9660;{% endif %}{% endif %}</span>
+                                </a>
+                            </th>
                             <th class="text-center">Ações</th>
                         </tr>
+                        {% endwith %}
                     </thead>
                     <tbody>
                         {% for item in itens %}
@@ -132,9 +192,64 @@
                     </tbody>
                 </table>
             </div>
+
+            {# --- Controles de Paginação --- #}
+            <nav>
+                <ul class="pagination justify-content-center">
+                    {% if itens.has_previous %}
+                        <li class="page-item">
+                            {% with new_params=request.GET.urlencode|remove_param:'page' %}
+                            <a class="page-link" href="?page={{ itens.previous_page_number }}&{{ new_params }}" aria-label="Anterior">Anterior</a>
+                            {% endwith %}
+                        </li>
+                    {% endif %}
+
+                    {% for i in itens.paginator.page_range %}
+                        <li class="page-item {% if itens.number == i %}active{% endif %}">
+                            {% with new_params=request.GET.urlencode|remove_param:'page' %}
+                            <a class="page-link" href="?page={{ i }}&{{ new_params }}">{{ i }}</a>
+                            {% endwith %}
+                        </li>
+                    {% endfor %}
+
+                    {% if itens.has_next %}
+                        <li class="page-item">
+                            {% with new_params=request.GET.urlencode|remove_param:'page' %}
+                            <a class="page-link" href="?page={{ itens.next_page_number }}&{{ new_params }}" aria-label="Próxima">Próxima</a>
+                            {% endwith %}
+                        </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {# --- Fim Controles de Paginação --- #}
+
         {% else %}
-            <p class="text-center text-muted">Nenhum item cadastrado ainda.</p>
+            <div class="text-center text-muted p-4">
+                <i class="fas fa-inbox fa-3x mb-3"></i>
+                <p>Nenhum item encontrado com os filtros aplicados.</p>
+            </div>
         {% endif %}
+    </div>
+</div>
+
+{# --- MODAL DE SUGESTÃO DA IA (Melhorado) --- #}
+<div class="modal fade" id="aiSuggestionModal" tabindex="-1" aria-labelledby="aiSuggestionModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="aiSuggestionModalLabel"><i class="fas fa-magic"></i> Sugestão de Classificação Inteligente</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="aiSuggestionBody">
+                    {# Conteúdo dinâmico será inserido aqui #}
+                </div>
+            </div>
+            <div class="modal-footer">
+                <a href="{% url 'materiais:gerenciar_categorias' %}" class="btn btn-warning"><i class="fas fa-tags"></i> Ir para Gerenciar Categorias</a>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -159,8 +274,29 @@
     </div>
 </div>
 
-<div class="modal fade" id="deletarItemModal" tabindex="-1">
+{# --- MODAL DE CONFIRMAÇÃO DE DELEÇÃO COMPLETO --- #}
+<div class="modal fade" id="deletarItemModal" tabindex="-1" aria-labelledby="deletarItemModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="deletarItemModalLabel"><i class="fas fa-trash-alt"></i> Confirmação de Exclusão</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Você tem certeza que deseja <strong>apagar permanentemente</strong> o seguinte item do catálogo?</p>
+                <p class="mb-0"><strong>Item:</strong> <span id="itemDescricaoModal"></span></p>
+                <p class="text-danger mt-3">Esta ação <strong>não pode ser desfeita</strong>.</p>
+            </div>
+            <div class="modal-footer">
+                <form id="formDeletarItem" method="POST" action="">
+                    {% csrf_token %}
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-danger">Apagar Item</button>
+                </form>
+            </div>
+        </div>
     </div>
+</div>
 {% endblock %}
 
 
@@ -180,6 +316,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const avisoDiv = document.getElementById('avisoSimilaridade');
     const checarInteligentementeBtn = document.getElementById('checarInteligentementeBtn');
     const similaridadeModal = new bootstrap.Modal(document.getElementById('similaridadeModal'));
+    const aiSuggestionModal = new bootstrap.Modal(document.getElementById('aiSuggestionModal'));
 
     // --- INICIALIZAÇÃO ---
     function initSelect2() {
@@ -199,7 +336,7 @@ document.addEventListener('DOMContentLoaded', function() {
         submitBtn.disabled = !(isDescriptionValid && isCategoryValid && isSubcategoryValid && isUnitValid);
     }
     
-    // --- LÓGICA DE CARREGAMENTO DE SUBCATEGORIAS (CORRIGIDA) ---
+    // --- LÓGICA DE CARREGAMENTO DE SUBCATEGORIAS ---
     async function loadAndSetSubcategories(categoriaId, subcategoriaToSelectId = null) {
         const $subcategoriaSelect = $('#subcategoria');
         $subcategoriaSelect.empty().prop('disabled', true).append('<option value="">Carregando...</option>').trigger('change');
@@ -228,6 +365,45 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    // --- FUNÇÃO PARA ABRIR O MODAL DE SUGESTÃO (NOVO) ---
+    function openAISuggestionModal(data) {
+        const modalBody = document.getElementById('aiSuggestionBody');
+        const unitText = $(unidadeSelect).find(`option[value='${data.unidade_id}']`).text();
+        let htmlContent = '';
+        
+        if (data.status === 'SUGERIR_SUBCATEGORIA') {
+            const catMaeText = $(categoriaSelect).find(`option[value='${data.categoria_mae_id}']`).text();
+            
+            htmlContent = `
+                <div class="alert alert-warning">
+                    <strong>ATENÇÃO:</strong> O item não se encaixa em nenhuma subcategoria existente.
+                </div>
+                <p>A IA sugere criar a seguinte hierarquia:</p>
+                <ul class="list-unstyled">
+                    <li><strong>Categoria Mãe (Existente):</strong> ${catMaeText}</li>
+                    <li><strong>Nova Subcategoria:</strong> <span class="badge bg-danger">${data.sugestao_nova_subcategoria}</span></li>
+                    <li><strong>Unidade Sugerida:</strong> ${unitText}</li>
+                </ul>
+                <p class="mt-3">A categoria principal foi pré-selecionada. Você precisa criar a nova subcategoria em "Gerenciar Categorias" ou escolher uma existente.</p>`;
+            
+        } else if (data.status === 'SUGERIR_NOVA') {
+            htmlContent = `
+                <div class="alert alert-danger">
+                    <strong>CRÍTICO:</strong> O item não se encaixa em nenhuma Categoria Principal existente.
+                </div>
+                <p>A IA sugere criar a seguinte **nova** hierarquia:</p>
+                <ul class="list-unstyled">
+                    <li><strong>Nova Categoria Mãe:</strong> <span class="badge bg-danger">${data.sugestao_nova_categoria_mae}</span></li>
+                    <li><strong>Nova Subcategoria:</strong> <span class="badge bg-danger">${data.sugestao_nova_subcategoria}</span></li>
+                    <li><strong>Unidade Sugerida:</strong> ${unitText}</li>
+                </ul>
+                <p class="mt-3">Você deve cadastrar a nova Categoria Mãe e a nova Subcategoria em "Gerenciar Categorias" antes de tentar classificar este item novamente.</p>`;
+        }
+        
+        modalBody.innerHTML = htmlContent;
+        aiSuggestionModal.show();
+    }
+
     // --- EVENT LISTENERS ---
     $('#categoria').on('change', function() {
         loadAndSetSubcategories($(this).val());
@@ -242,6 +418,20 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('forcarCadastroInput').value = 'false';
     });
 
+    // Event listener para o formulário de per_page
+    document.getElementById('per_page').addEventListener('change', function() {
+        document.getElementById('formPerpage').submit();
+    });
+    
+    // Event listener para o formulário de filtros (busca)
+    document.getElementById('formFiltros').addEventListener('submit', function(e) {
+        // Remove a página para reiniciar a paginação ao fazer uma nova busca
+        const url = new URL(window.location.href);
+        url.searchParams.delete('page');
+        this.action = `${window.location.pathname}?${url.searchParams.toString()}`;
+    });
+
+    // --- LÓGICA DE CHECAGEM INTELIGENTE ---
     checarInteligentementeBtn.addEventListener('click', async function() {
         const description = descricaoInput.value.trim();
         if (description.length < 5) {
@@ -255,6 +445,7 @@ document.addEventListener('DOMContentLoaded', function() {
         similarItemsData = [];
 
         try {
+            // Passo 1: Checagem de Duplicidade (Sincronizada ou não)
             const checkUrl = `{% url 'materiais:api_item_check' %}?descricao=${encodeURIComponent(description)}`;
             const checkResponse = await fetch(checkUrl).then(r => r.json());
 
@@ -273,6 +464,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 similaridadeHtml = `<div class="alert alert-warning p-2 mt-2"><strong>Aviso de Similaridade:</strong> Itens parecidos foram encontrados: <ul>${itensSumarizados}</ul></div>`;
             }
 
+            // Passo 2: Chamada ao Gemini
             avisoDiv.innerHTML = '<div class="alert alert-info p-2"><strong>2/3:</strong> Chamando IA para sugerir categorias...</div>';
 
             const aiUrl = `{% url 'materiais:api_sugerir_categoria' %}?descricao=${encodeURIComponent(description)}`;
@@ -280,12 +472,20 @@ document.addEventListener('DOMContentLoaded', function() {
 
             if (!geminiResponse.success) throw new Error(geminiResponse.error || "Erro na resposta da IA.");
             
+            // Passo 3: Preencher formulário e dar feedback final
             await preFillMainForm(description, geminiResponse);
             
             avisoDiv.innerHTML = `<div class="alert alert-success p-2"><strong>3/3:</strong> Campos preenchidos pela IA! Por favor, revise e confirme.</div>` + similaridadeHtml;
 
         } catch (error) {
-            avisoDiv.innerHTML = `<div class="alert alert-danger p-2"><strong>Falha Crítica:</strong> ${error.message}</div>`;
+            if (error.message.includes("Processo interrompido")) {
+                 // Deixa a mensagem do Passo 1
+            } else if (error.message.includes("Falha na classificação de IA.")) {
+                 // Deixa a mensagem do Passo 2/3
+            } else {
+                 // Erro geral
+                 avisoDiv.innerHTML = `<div class="alert alert-danger p-2"><strong>Erro Geral:</strong> ${error.message}</div>`;
+            }
         } finally {
             this.disabled = false;
             this.innerHTML = '<i class="fas fa-magic"></i> Checar';
@@ -297,31 +497,42 @@ document.addEventListener('DOMContentLoaded', function() {
         descricaoInput.value = description;
         $(tagsSelect).val(null).trigger('change');
 
+        // Tenta setar a unidade em todos os casos (seja nova, sugere, ou existe)
+        if (data.unidade_id) {
+             $(unidadeSelect).val(data.unidade_id).trigger('change');
+        }
+
         if (data.status === 'EXISTENTE') {
             const catMaeId = data.categoria_mae_id;
             const subCatId = data.subcategoria_id;
-            const unitId = data.unidade_id;
 
             $(categoriaSelect).val(catMaeId).trigger('change.select2');
+            // Espera a subcategoria carregar para depois setar o valor
             await loadAndSetSubcategories(catMaeId, subCatId);
-            $(unidadeSelect).val(unitId).trigger('change');
-            
+
         } else if (data.status === 'SUGERIR_SUBCATEGORIA') {
              const catMaeId = data.categoria_mae_id;
-             const unitId = data.unidade_id;
+
              $(categoriaSelect).val(catMaeId).trigger('change.select2');
-             await loadAndSetSubcategories(catMaeId, null);
-             $(unidadeSelect).val(unitId).trigger('change');
-             alert(`ATENÇÃO: A IA sugere criar a nova subcategoria "${data.sugestao_nova_subcategoria}" dentro da categoria selecionada. Você pode fazer isso em 'Gerenciar Categorias'.`);
+             await loadAndSetSubcategories(catMaeId, null); // Carrega as opções, mas não seleciona a nova (que não existe)
+             openAISuggestionModal(data); // Abre o novo modal de aviso
 
         } else if (data.status === 'SUGERIR_NOVA') {
-            alert(`ATENÇÃO: A IA sugeriu criar uma nova categoria: ${data.sugestao_nova_categoria_mae} > ${data.sugestao_nova_subcategoria}. Por favor, cadastre-as em 'Gerenciar Categorias' primeiro.`);
-            $(categoriaSelect).val('').trigger('change');
+            $(categoriaSelect).val('').trigger('change'); // Limpa os campos
+            loadAndSetSubcategories(null, null); // Desabilita subcategoria
+            openAISuggestionModal(data); // Abre o novo modal de aviso
         }
     }
 
     // Lógica para interceptar o submit e mostrar o modal de confirmação
     formCadastrarItem.addEventListener('submit', function(e) {
+        // Validações básicas antes de tudo
+        if (submitBtn.disabled) {
+            e.preventDefault();
+            alert('Preencha todos os campos obrigatórios.');
+            return;
+        }
+
         if (similarItemsData.length > 0 && document.getElementById('forcarCadastroInput').value === 'false') {
             e.preventDefault(); 
             

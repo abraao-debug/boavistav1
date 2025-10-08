@@ -3,7 +3,7 @@ from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.utils import timezone
 from django.db import transaction
-
+from . import rm_config # Importa o novo rm_config
 class User(AbstractUser):
     PERFIL_CHOICES = [
         ('almoxarife_obra', 'Almoxarife da Obra'),
@@ -298,6 +298,15 @@ class RequisicaoMaterial(models.Model):
     data_assinatura_diretor = models.DateTimeField(null=True, blank=True)
     enviada_fornecedor = models.BooleanField(default=False)
     data_envio_fornecedor = models.DateTimeField(null=True, blank=True)
+
+    # --- NOVO CAMPO: ESCOLHA DO CABEÇALHO (CORREÇÃO APLICADA) ---
+    header_choice = models.CharField(
+        max_length=1, 
+        choices=rm_config.HEADER_CHOICES,
+        default='A',
+        verbose_name="Cabeçalho da RM"
+    )
+    # -------------------------------------------------------------
 
     def save(self, *args, **kwargs):
         if not self.numero:

@@ -11,24 +11,52 @@
 </div>
 <hr class="mb-4">
 
+<div class="card mb-4">
+    <div class="card-header">
+        <h5><i class="fas fa-tools"></i> Opções de Envio</h5>
+    </div>
+    <div class="card-body">
+        <form id="formHeaderChoice" method="POST" action="{% url 'materiais:enviar_rm_fornecedor' rm.id %}">
+            {% csrf_token %}
+            <div class="row align-items-end">
+                <div class="col-md-6 mb-3">
+                    <label for="header_choice" class="form-label">Escolha do Cabeçalho da RM *</label>
+                    <select name="header_choice" id="header_choice" class="form-select" required>
+                        {% for key, label in header_choices %}
+                            <option value="{{ key }}" {% if rm.header_choice == key %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                    <small class="form-text text-muted">A RM será gerada com as informações de contato da empresa selecionada.</small>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <button type="button" class="btn btn-outline-info w-100" id="btnRecarregarPDF">
+                        <i class="fas fa-sync-alt"></i> Atualizar Pré-visualização
+                    </button>
+                </div>
+            </div>
+            
+            {# Campos ocultos para o envio final (serão preenchidos pelo JS) #}
+            <input type="hidden" name="rm_id" value="{{ rm.id }}">
+        </form>
+    </div>
+</div>
+
 <div class="card">
     <div class="card-header">
         <h5><i class="fas fa-file-pdf"></i> Pré-visualização da RM</h5>
     </div>
     <div class="card-body">
         <div class="embed-responsive" style="height: 70vh;">
-            <iframe src="{% url 'materiais:visualizar_rm_pdf' rm.id %}" width="100%" height="100%" frameborder="0"></iframe>
+            {# URL inicial do PDF usando a escolha atual #}
+            <iframe id="pdfFrame" src="{% url 'materiais:visualizar_rm_pdf' rm.id %}?header={{ rm.header_choice|default:'A' }}" width="100%" height="100%" frameborder="0"></iframe>
         </div>
     </div>
     <div class="card-footer bg-light text-center">
         <div class="d-flex justify-content-center align-items-center gap-3">
-            <a href="{% url 'materiais:visualizar_rm_pdf' rm.id %}" class="btn btn-outline-primary" download="RM_{{ rm.numero }}.pdf">
+            {# O link de Download será atualizado pelo JS antes do download, mas o href inicial aponta para a escolha salva #}
+            <a id="downloadLink" href="{% url 'materiais:visualizar_rm_pdf' rm.id %}?header={{ rm.header_choice|default:'A' }}" class="btn btn-outline-primary" download="RM_{{ rm.numero }}.pdf">
                 <i class="fas fa-download"></i> Baixar PDF
             </a>
-            
-            <form id="formEnviarRm" method="POST">
-                {% csrf_token %}
-            </form>
             
             <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#confirmarEnvioRmModal">
                 <i class="fas fa-check-circle"></i> Confirmar Envio Manual
@@ -38,6 +66,7 @@
     </div>
 </div>
 
+{# O Modal de Confirmação de Envio deve usar o valor selecionado #}
 <div class="modal fade" id="confirmarEnvioRmModal" tabindex="-1" aria-labelledby="confirmarEnvioRmModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
@@ -53,6 +82,7 @@
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        {# Este botão agora submeterá o formulário formHeaderChoice #}
         <button type="button" class="btn btn-success" id="btnConfirmarEnvioFinal">Sim, confirmar envio</button>
       </div>
     </div>
@@ -65,19 +95,42 @@
 {% block javascript %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const btnConfirmarFinal = document.getElementById('btnConfirmarEnvioFinal');
-    const formParaEnviar = document.getElementById('formEnviarRm');
+    const btnRecarregarPDF = document.getElementById('btnRecarregarPDF');
+    const headerChoiceSelect = document.getElementById('header_choice');
+    const pdfFrame = document.getElementById('pdfFrame');
+    const downloadLink = document.getElementById('downloadLink');
 
-    if (btnConfirmarFinal && formParaEnviar) {
+    // O botão final de confirmação agora submete o formulário que contém a escolha do header
+    const btnConfirmarFinal = document.getElementById('btnConfirmarEnvioFinal');
+    const formHeaderChoice = document.getElementById('formHeaderChoice'); // Formulário com o dropdown
+
+    function updatePDFandDownloadLink() {
+        const selectedHeader = headerChoiceSelect.value;
+        const newUrl = `{% url 'materiais:visualizar_rm_pdf' rm.id %}?header=${selectedHeader}`;
+        pdfFrame.src = newUrl;
+        downloadLink.href = newUrl; // Atualiza o link de download
+    }
+
+    // 1. Lógica para atualizar a pré-visualização do PDF
+    btnRecarregarPDF.addEventListener('click', updatePDFandDownloadLink);
+
+    // 2. Lógica para submeter a RM com o header escolhido
+    if (btnConfirmarFinal && formHeaderChoice) {
         btnConfirmarFinal.addEventListener('click', function() {
             // Desabilita o botão para evitar duplo clique
             btnConfirmarFinal.disabled = true;
             btnConfirmarFinal.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Enviando...';
             
-            // Envia o formulário
-            formParaEnviar.submit();
+            // Submete o formulário com a escolha do header para a view enviar_rm_fornecedor
+            formHeaderChoice.submit();
         });
     }
+
+    // 3. Recarrega o PDF ao trocar o dropdown
+    headerChoiceSelect.addEventListener('change', updatePDFandDownloadLink);
+
+    // 4. Garante que o link de download reflita a URL de visualização atual ao carregar
+    updatePDFandDownloadLink();
 });
 </script>
 {% endblock %}
